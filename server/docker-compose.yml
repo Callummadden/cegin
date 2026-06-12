@@ -1,0 +1,12 @@
+services:
+  recipe-server:
+    build: .
+    container_name: recipe-server
+    ports:
+      - "3000:3000"
+    volumes:
+      - recipe-data:/data
+    restart: unless-stopped
+
+volumes:
+  recipe-data:
