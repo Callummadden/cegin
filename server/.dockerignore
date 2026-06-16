@@ -1,3 +1,38 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Database and data
 recipes.db*
+*.sqlite*
+whisk-data/
+
+# Environment & secrets (never ship these)
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# Logs and debug
 *.log
+npm-debug.log*
+
+# Git and editor
+.git
+.gitignore
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker itself
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Misc
+coverage/
+.nyc_output/

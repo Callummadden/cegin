@@ -1,12 +1,70 @@
+# =============================================================================
+# Cegin Server - docker-compose
+#
+# Primary way to run the self-hosted backend.
+# The mobile app talks to this over your local network (LAN).
+#
+# SECURITY: API keys and JWT secret are loaded via Docker Compose secrets
+# (mounted as files at /run/secrets/ inside the container). They are NEVER
+# visible via `docker inspect`, `docker exec env`, or image layer inspection.
+#
+# SETUP:
+#   1. Copy .env.example to .env and edit non-secret settings (provider, model, etc.)
+#   2. Create secret files:
+#        mkdir -p secrets && chmod 700 secrets
+#        echo "your-text-api-key"       > secrets/TEXT_API_KEY
+#        echo "your-vision-api-key"     > secrets/VISION_API_KEY
+#        echo "your-jwt-secret"         > secrets/JWT_SECRET
+#        chmod 600 secrets/*
+#   3. docker compose up -d --build
+#
+# For quick local dev without Docker secrets, you can also just use .env
+# (the app falls back to env vars if no secrets are found).
+# =============================================================================
+
 services:
-  recipe-server:
+  cegin-server:
     build: .
-    container_name: recipe-server
+    container_name: cegin-server
     ports:
       - "3000:3000"
     volumes:
-      - recipe-data:/data
+      # Persistent SQLite database. Survives container rebuilds/restarts.
+      - cegin-data:/data
+    env_file:
+      - .env
+    secrets:
+      - TEXT_API_KEY
+      - VISION_API_KEY
+      - JWT_SECRET
     restart: unless-stopped
 
+    # Healthcheck uses the built-in /api/health endpoint.
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Limit resources to prevent runaway AI requests from eating your VPS.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+# Docker Compose secrets — mounted as files at /run/secrets/<name>.
+# Create these files before running: see SETUP instructions above.
+secrets:
+  TEXT_API_KEY:
+    file: ./secrets/TEXT_API_KEY
+  VISION_API_KEY:
+    file: ./secrets/VISION_API_KEY
+  JWT_SECRET:
+    file: ./secrets/JWT_SECRET
+
+# Named volume for the database. Back it up with:
+# docker run --rm -v cegin-data:/data -v "$PWD":/backup alpine cp /data/recipes.db /backup/recipes.db.bak
 volumes:
-  recipe-data:
+  cegin-data:

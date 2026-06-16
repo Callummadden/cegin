@@ -1,0 +1,34 @@
+// notifications.expo.js
+// This file is automatically preferred by Expo Go (SDK 53+).
+// It contains NO native imports — keeps the app red-screen free.
+// The real implementation lives in notifications.js (used by dev builds).
+
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+export async function requestPermissions() {
+  console.log('[notifications] Skipping in Expo Go');
+}
+
+export async function getPermissionStatus() {
+  return 'unavailable';
+}
+
+export async function requestPermissionAndGetStatus() {
+  return 'unavailable';
+}
+
+export async function getPushToken() {
+  return null;
+}
+
+export async function registerForPushNotifications(_registerFn) {
+  console.log('[notifications] Push not available in Expo Go — use a dev build');
+  return null;
+}
+
+export async function scheduleNotification(_seconds, _title, _body) {
+  return null;
+}
+
+export async function cancelNotification(_id) {}

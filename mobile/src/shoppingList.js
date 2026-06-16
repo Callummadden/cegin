@@ -1,0 +1,106 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const KEY = 'cegin_shopping_list';
+
+// Each item: { id: string, text: string, checked: boolean, category?: string, source?: string }
+let _cache = null;
+
+export async function getShoppingList() {
+  if (_cache) return _cache;
+  try {
+    const raw = await AsyncStorage.getItem(KEY);
+    _cache = raw ? JSON.parse(raw) : [];
+  } catch {
+    _cache = [];
+  }
+  return _cache;
+}
+
+async function save(list) {
+  _cache = list;
+  await AsyncStorage.setItem(KEY, JSON.stringify(list));
+}
+
+// Check if a new item text matches any existing item (exact or contains)
+function isDuplicate(newText, existingTexts) {
+  const lower = newText.toLowerCase();
+  // Exact match
+  if (existingTexts.has(lower)) return true;
+  // Check if new text contains an existing item or vice versa
+  for (const existing of existingTexts) {
+    if (lower.includes(existing) || existing.includes(lower)) return true;
+  }
+  return false;
+}
+
+export async function addItems(texts) {
+  const list = await getShoppingList();
+  const existing = new Set(list.map((i) => i.text.toLowerCase()));
+  const newItems = texts
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .filter((t) => !isDuplicate(t, existing))
+    .map((t) => {
+      existing.add(t.toLowerCase()); // prevent dupes within the batch
+      return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: t, checked: false };
+    });
+  if (newItems.length) {
+    await save([...list, ...newItems]);
+  }
+  return _cache;
+}
+
+// Add items grouped by category with recipe sources.
+// categories: [{ name, items: [{ text, recipes }] }]
+export async function addItemsGrouped(categories) {
+  const list = await getShoppingList();
+  const existing = new Set(list.map((i) => i.text.toLowerCase()));
+  const newItems = [];
+  for (const cat of categories) {
+    for (const item of cat.items) {
+      const text = typeof item === 'string' ? item : item.text;
+      const trimmed = text.trim();
+      if (trimmed && !isDuplicate(trimmed, existing)) {
+        existing.add(trimmed.toLowerCase());
+        const recipes = typeof item === 'string' ? [] : (item.recipes || []);
+        newItems.push({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          text: trimmed,
+          checked: false,
+          category: cat.name,
+          source: recipes.join(', '),
+        });
+      }
+    }
+  }
+  if (newItems.length) {
+    await save([...list, ...newItems]);
+  }
+  return _cache;
+}
+
+export async function toggleItem(id) {
+  const list = await getShoppingList();
+  const next = list.map((i) => i.id === id ? { ...i, checked: !i.checked } : i);
+  await save(next);
+  return next;
+}
+
+export async function deleteItem(id) {
+  const list = await getShoppingList();
+  const next = list.filter((i) => i.id !== id);
+  await save(next);
+  return next;
+}
+
+export async function removeChecked() {
+  const list = await getShoppingList();
+  const next = list.filter((i) => !i.checked);
+  await save(next);
+  return next;
+}
+
+export async function clearList() {
+  await save([]);
+  return [];
+}

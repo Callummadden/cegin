@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets
+.env
+.env.*
+!**/.env.example
+*.pem
+*.key
+
+# Database & data
+recipes.db
+recipes.db*
+*.sqlite
+*.sqlite3
+whisk-data/
+
+# Built artifacts & large binaries
+*.apk
+*.aab
+*.ipa
+Forkful.apk
+dist/
+build/
+web-build/
+.expo/
+.expo-shared/
+android/app/build/
+android/build/
+ios/build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
+
+# Logs & debug
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
+
+# OS & editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Personal / tool dirs
+.claude/
+.claude/
+.hermes/
+metro-health-check*
+
+# Caches
+.npm/
+.yarn/
+.cache/
+*.cache
+
+# Misc generated
+storybook-static/
+coverage/
