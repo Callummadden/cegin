@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page not found — Cegin</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#131010">
+  <link rel="icon" href="assets/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="themes.js"></script>
+  <script>CeginThemes.initFromStorage();</script>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to content</a>
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="index.html" class="brand">
+        <img src="assets/icon.png" alt="Cegin app icon" width="40" height="40">
+        <span class="brand-name">CEGIN</span>
+      </a>
+      <button class="nav-toggle mono" aria-label="Toggle menu">Menu</button>
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="index.html#download">Download</a>
+        <a href="index.html#faq">FAQ</a>
+        <button type="button" class="theme-trigger" data-theme-open aria-label="Change theme">
+          <span class="theme-trigger-dot"></span>
+          <span class="theme-trigger-label">Theme</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main" class="container" style="padding: 120px 0 80px; text-align: center; max-width: 520px;">
+    <p class="mono" style="color: var(--primary); margin-bottom: 12px;">404</p>
+    <h1 style="font-size: 2rem; margin: 0 0 12px;">This page wandered off</h1>
+    <p style="color: var(--text-muted); margin: 0 0 28px;">Terry checked the pantry — nothing here. Maybe the recipe moved?</p>
+    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+      <a href="index.html" class="btn btn-primary">Back to home</a>
+      <a href="index.html#faq" class="btn btn-secondary">FAQ</a>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <a href="index.html" class="brand">
+        <img src="assets/icon.png" alt="" width="32" height="32">
+        <span class="brand-name">CEGIN</span>
+      </a>
+      <p class="footer-copy">Enjoy cooking with Terry. 🐱</p>
+    </div>
+  </footer>
+
+  <div class="theme-overlay" id="theme-overlay" data-theme-close></div>
+  <aside class="theme-panel" id="theme-panel" aria-label="Theme settings">
+    <div class="theme-panel-header">
+      <h2>THEME</h2>
+      <button type="button" class="theme-panel-close" data-theme-close aria-label="Close">×</button>
+    </div>
+    <p class="theme-section-label">APPEARANCE</p>
+    <div class="theme-mode-group" data-theme-mode-group>
+      <button type="button" class="theme-mode-btn" data-mode="dark">Dark</button>
+      <button type="button" class="theme-mode-btn" data-mode="light">Light</button>
+      <button type="button" class="theme-mode-btn" data-mode="system">System</button>
+    </div>
+    <p class="theme-section-label">PALETTE</p>
+    <div class="theme-palette-grid" data-theme-palette-grid></div>
+    <div class="theme-oled-section" data-theme-oled-section hidden>
+      <p class="theme-section-label">OLED ACCENT</p>
+      <div class="theme-oled-grid" data-theme-oled-grid></div>
+    </div>
+  </aside>
+
+  <script src="main.js"></script>
+</body>
+</html>

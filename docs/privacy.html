@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Cegin</title>
+  <meta name="description" content="Privacy policy for Cegin, a self-hosted personal recipe app.">
+  <meta name="theme-color" content="#131010">
+  <link rel="canonical" href="https://www.cegin.kitchen/privacy.html">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.cegin.kitchen/privacy.html">
+  <meta property="og:title" content="Privacy Policy — Cegin">
+  <meta property="og:description" content="How Cegin handles your data in server and local mode. Self-hosted, no cloud backend.">
+  <meta property="og:image" content="https://www.cegin.kitchen/assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="themes.js"></script>
+  <script>CeginThemes.initFromStorage();</script>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to content</a>
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="index.html" class="brand">
+        <img src="assets/icon.png" alt="Cegin app icon" width="40" height="40">
+        <span class="brand-name">CEGIN</span>
+      </a>
+      <button class="nav-toggle mono" aria-label="Toggle menu">Menu</button>
+      <div class="nav-links">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#terry">Chef Terry</a>
+        <a href="index.html#download">Download</a>
+        <a href="https://github.com/Callummadden/cegin" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <button type="button" class="theme-trigger" data-theme-open aria-label="Change theme">
+          <span class="theme-trigger-dot"></span>
+          <span class="theme-trigger-label">Theme</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main">
+  <header class="page-header">
+    <div class="container">
+      <p class="mono">Legal</p>
+      <h1>Privacy Policy</h1>
+      <p>Last updated: June 17, 2026</p>
+    </div>
+  </header>
+
+  <div class="container legal-content">
+    <h2>Overview</h2>
+    <p>
+      Cegin is a self-hosted personal recipe application. It is designed so that your data stays
+      under your control — on your phone, or on a server you run yourself. This policy describes
+      how the app handles information in both server and local modes.
+    </p>
+
+    <h2>What data the app stores</h2>
+    <p>
+      Cegin does not collect your data. Everything stays on your device or your own server.
+      The app stores the data you create and import, including:
+    </p>
+    <ul>
+      <li>Recipes, ingredients, instructions, images, and collections</li>
+      <li>Meal plans and shopping lists</li>
+      <li>Dietary profiles you configure</li>
+      <li>Chat history with Chef Terry (if you use AI features)</li>
+      <li>Fridge scan results from Terry Vision (if you use vision features)</li>
+      <li>Push notification tokens (APK builds only, for meal reminders)</li>
+    </ul>
+    <p>
+      None of this data is sent to the Cegin project, sold, or shared with third-party analytics
+      services. There are no servers operated by Cegin that receive your information.
+    </p>
+
+    <h2>Server mode</h2>
+    <p>
+      When you connect the app to a self-hosted Cegin server, your data is stored in a SQLite
+      database on that server. You (or whoever operates the server) control where it runs, who can
+      access it, and how it is backed up.
+    </p>
+    <ul>
+      <li>No accounts or login — the app connects by server URL only</li>
+      <li>API keys for AI providers are stored as Docker secrets or local secret files, not in the database</li>
+      <li>Network access is up to you — typically a private LAN, but you choose how it is exposed</li>
+    </ul>
+
+    <h2>Local mode</h2>
+    <p>
+      In local mode, all recipe data is stored in SQLite on your device. If you configure AI
+      providers, API keys are stored in the operating system's secure storage (Android Keystore /
+      iOS Keychain). In Expo Go development builds, keys may fall back to unencrypted storage.
+    </p>
+
+    <h2>AI providers</h2>
+    <p>
+      When you use Chef Terry, meal planning AI, Terry Vision, or recipe import features that
+      call an AI provider, relevant content (such as recipe text, chat messages, or fridge photos)
+      is sent to the AI endpoint you configure — for example DeepSeek, Groq, OpenAI, Gemini, or a
+      local Ollama instance.
+    </p>
+    <p>
+      Cegin does not control how third-party AI providers handle that data. Review the privacy
+      policy of whichever provider you choose. You can disable all AI features with the "No AI"
+      toggle in Settings.
+    </p>
+
+    <h2>Push notifications</h2>
+    <p>
+      On native APK builds with notifications enabled, the app registers an Expo push token with
+      your self-hosted server. The server uses this token to send meal prep reminders and
+      perishable ingredient alerts. Notification content is generated on your server and sent
+      through Expo's push infrastructure.
+    </p>
+
+    <h2>Network access</h2>
+    <p>
+      The mobile app communicates directly with your configured server address over your local
+      network or the internet, depending on how you deploy it. The Cegin website (cegin.kitchen)
+      is a static landing page and does not collect personal data.
+    </p>
+
+    <h2>Data deletion</h2>
+    <p>
+      You can delete individual recipes, chat history, and other data from within the app. To
+      remove all data, use the reset option in Settings or delete the SQLite database on your
+      server or device.
+    </p>
+
+    <h2>Children's privacy</h2>
+    <p>
+      Cegin is not directed at children under 13. The app does not knowingly collect personal
+      information from children.
+    </p>
+
+    <h2>Changes</h2>
+    <p>
+      This policy may be updated as the app evolves. Material changes will be reflected on this
+      page with an updated date.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Cegin is open source. For questions or issues, open an issue on the
+      <a href="https://github.com/Callummadden/cegin" target="_blank" rel="noopener noreferrer">GitHub repository</a>.
+    </p>
+  </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <a href="index.html" class="brand">
+        <img src="assets/icon.png" alt="" width="32" height="32">
+        <span class="brand-name">CEGIN</span>
+      </a>
+      <div class="footer-links">
+        <a href="privacy.html">Privacy</a>
+        <a href="https://github.com/Callummadden/cegin" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/Callummadden/cegin/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a>
+      </div>
+      <p class="footer-copy">Enjoy cooking with Terry. 🐱</p>
+    </div>
+  </footer>
+
+  <div class="theme-overlay" id="theme-overlay" data-theme-close></div>
+  <aside class="theme-panel" id="theme-panel" aria-label="Theme settings">
+    <div class="theme-panel-header">
+      <h2>THEME</h2>
+      <button type="button" class="theme-panel-close" data-theme-close aria-label="Close">×</button>
+    </div>
+    <p class="theme-section-label">APPEARANCE</p>
+    <div class="theme-mode-group" data-theme-mode-group>
+      <button type="button" class="theme-mode-btn" data-mode="dark">Dark</button>
+      <button type="button" class="theme-mode-btn" data-mode="light">Light</button>
+      <button type="button" class="theme-mode-btn" data-mode="system">System</button>
+    </div>
+    <p class="theme-section-label">PALETTE</p>
+    <div class="theme-palette-grid" data-theme-palette-grid></div>
+    <div class="theme-oled-section" data-theme-oled-section hidden>
+      <p class="theme-section-label">OLED ACCENT</p>
+      <div class="theme-oled-grid" data-theme-oled-grid></div>
+    </div>
+  </aside>
+
+  <script src="main.js"></script>
+</body>
+</html>
