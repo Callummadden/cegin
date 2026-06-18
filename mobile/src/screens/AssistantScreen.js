@@ -5,7 +5,6 @@ import {
   FlatList,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -319,11 +318,11 @@ export default function AssistantScreen({ navigation, route }) {
   const [conversationId, setConversationId] = useState(null);
   const [speaking, setSpeaking] = useState(false);
   const [speakingMsgIdx, setSpeakingMsgIdx] = useState(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
   const lastSpokeRef = useRef(null);
@@ -379,10 +378,9 @@ export default function AssistantScreen({ navigation, route }) {
 
   const buildContext = async () => {
     try {
-      const [recipes, mealPlan, profiles, shoppingList, cookbook, stats, topRecipes] = await Promise.all([
+      const [recipes, mealPlan, shoppingList, cookbook, stats, topRecipes] = await Promise.all([
         api.listRecipes().catch(() => []),
         getMealPlan(),
-        getDietaryProfiles().catch(() => []),
         getShoppingList().catch(() => []),
         getCookbook().catch(() => []),
         getStats().catch(() => ({ cookCount: 0 })),
@@ -406,16 +404,7 @@ export default function AssistantScreen({ navigation, route }) {
         parts.push(`Their meal plan has: ${planned.slice(0, 7).join('; ')}`);
       }
 
-      // Dietary profiles
-      if (profiles.length) {
-        const profileDescs = profiles.map((p) => {
-          let desc = p.name ? `${p.name}` : 'Someone';
-          if (p.needs) desc += ` (${p.needs})`;
-          if (p.notes) desc += ` — ${p.notes}`;
-          return desc;
-        });
-        parts.push(`Dietary profiles: ${profileDescs.join('; ')}`);
-      }
+      // Dietary profiles are now in the system prompt via aiChat, no need to duplicate here
 
       // Shopping list
       if (shoppingList.length) {
@@ -512,7 +501,8 @@ export default function AssistantScreen({ navigation, route }) {
     setMessages([...messages, { role: 'user', content, timestamp: Date.now() }]);
     setSending(true);
     try {
-      const { reply } = await api.aiChat(next.filter((m) => m !== GREETING));
+      const profiles = await getDietaryProfiles().catch(() => []);
+      const { reply } = await api.aiChat(next.filter((m) => m !== GREETING), profiles);
 
       // 20% chance to append a fun food fact
       let finalReply = reply;
@@ -713,7 +703,6 @@ export default function AssistantScreen({ navigation, route }) {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {/* Header */}
         <View style={topBarStyle}>
           <Text style={[styles.screenTitle, { color: colors.text }]}>CHEF TERRY</Text>
@@ -751,6 +740,7 @@ export default function AssistantScreen({ navigation, route }) {
               !hasConversation && { paddingBottom: 100 },
             ]}
             keyboardShouldPersistTaps="handled"
+            scrollEnabled={hasConversation}
             initialNumToRender={15}
             maxToRenderPerBatch={10}
             windowSize={10}
@@ -801,7 +791,7 @@ export default function AssistantScreen({ navigation, route }) {
             </View>
           )}
 
-          <View style={[styles.composer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+          <View style={[styles.composer, { backgroundColor: colors.background, borderTopColor: colors.border, marginBottom: keyboardHeight, paddingBottom: keyboardHeight > 0 ? 12 : 100 }]}>
             <TextInput
               style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
               value={input}
@@ -834,7 +824,6 @@ export default function AssistantScreen({ navigation, route }) {
           onDelete={handleDeleteHistory}
           colors={colors}
         />
-      </KeyboardAvoidingView>
 
       <BottomNav active="assistant" navigation={navigation} />
     </View>

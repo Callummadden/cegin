@@ -17,7 +17,7 @@ RUN apk add --no-cache python3 make g++ \
 
 # --- Application code ---
 # .dockerignore keeps this layer clean (excludes node_modules, .env, db files, etc.)
-COPY . . 
+COPY --chown=node:node . .
 
 # Database lives on a Docker volume so it survives container restarts/rebuilds.
 ENV DB_PATH=/data/recipes.db

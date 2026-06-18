@@ -14,8 +14,12 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MONO, useTheme, THEME_LIST, OLED_ACCENTS, M3_SEEDS } from '../theme';
-import { setServerUrl, setCustomAIConfig } from '../config';
+import { setServerUrl, setCustomAIConfig, fetchAvailableModels } from '../config';
 import { useAi } from '../aiContext';
+import { addDietaryProfile, getDietaryProfiles, removeDietaryProfile } from '../dietProfiles';
+import { getPermissionStatus, requestPermissionAndGetStatus, getPushToken } from '../notifications';
+import * as ImagePicker from 'expo-image-picker';
+import { api } from '../api';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -70,6 +74,22 @@ export default function SetupScreen({ route, navigation }) {
     model: 'gemini-2.5-flash',
   });
 
+  // Diet profiles
+  const [profiles, setProfiles] = useState([]);
+  const [dietName, setDietName] = useState('');
+  const [dietNeeds, setDietNeeds] = useState('');
+  const [dietNotes, setDietNotes] = useState('');
+
+  // Model discovery
+  const [textModels, setTextModels] = useState([]);
+  const [visionModels, setVisionModels] = useState([]);
+  const [discoveringText, setDiscoveringText] = useState(false);
+  const [discoveringVision, setDiscoveringVision] = useState(false);
+
+  // Permissions
+  const [notifStatus, setNotifStatus] = useState('undetermined');
+  const [cameraStatus, setCameraStatus] = useState('undetermined');
+
   // ── Navigation helpers ─────────────────────────────────────────────────
   const goNext = (next) => {
     Animated.timing(slideAnim, { toValue: -SCREEN_W * 0.15, duration: 120, useNativeDriver: true }).start(() => {
@@ -88,7 +108,7 @@ export default function SetupScreen({ route, navigation }) {
   const handleNoAI = async () => {
     setNoAI(true);
     await AsyncStorage.setItem('app_mode', 'local');
-    goNext('theme');
+    goNext('permissions');
   };
 
   const handleLocalPick = () => { setNoAI(false); goNext('ai'); };
@@ -101,11 +121,27 @@ export default function SetupScreen({ route, navigation }) {
         vision: visionProvider.apiKey ? visionProvider : null,
       });
       await AsyncStorage.setItem('app_mode', 'local');
-      goNext('theme');
+      goNext('diet');
     } catch (e) {
       setError(e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const discoverModels = async (type) => {
+    const provider = type === 'text' ? textProvider : visionProvider;
+    const setDiscovering = type === 'text' ? setDiscoveringText : setDiscoveringVision;
+    const setModels = type === 'text' ? setTextModels : setVisionModels;
+
+    setDiscovering(true);
+    try {
+      const models = await fetchAvailableModels(provider.baseUrl, provider.apiKey);
+      setModels(models);
+    } catch {
+      setModels([]);
+    } finally {
+      setDiscovering(false);
     }
   };
 
@@ -124,7 +160,7 @@ export default function SetupScreen({ route, navigation }) {
       const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       await AsyncStorage.setItem('app_mode', 'server');
-      goNext('theme');
+      goNext('diet');
     } catch (e) {
       setError(`Could not connect: ${e.message}`);
     } finally {
@@ -368,15 +404,53 @@ export default function SetupScreen({ route, navigation }) {
           />
 
           <Text style={[styles.label, { color: colors.textMuted }]}>MODEL NAME</Text>
-          <TextInput
-            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
-            value={textProvider.model}
-            onChangeText={(v) => setTextProvider((p) => ({ ...p, model: v }))}
-            placeholder="deepseek-chat, gpt-4o-mini, gemini-2.5-flash..."
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          {textModels.length > 0 ? (
+            <View style={[styles.modelDropdown, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                {textModels.map((m) => {
+                  const active = textProvider.model === m.id;
+                  return (
+                    <Pressable
+                      key={m.id}
+                      style={[styles.modelOption, { borderBottomColor: colors.border }, active && { backgroundColor: colors.primary + '15' }]}
+                      onPress={() => setTextProvider((p) => ({ ...p, model: m.id }))}
+                    >
+                      <Text style={[styles.modelOptionText, { fontFamily: MONO, color: active ? colors.primary : colors.text }]} numberOfLines={1}>
+                        {m.id}
+                      </Text>
+                      {active && <Text style={{ color: colors.primary, fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Pressable style={styles.modelDropdownClose} onPress={() => setTextModels([])}>
+                <Text style={[styles.label, { color: colors.textMuted, marginBottom: 0 }]}>TYPE MANUALLY</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+                value={textProvider.model}
+                onChangeText={(v) => setTextProvider((p) => ({ ...p, model: v }))}
+                placeholder="deepseek-chat, gpt-4o-mini, gemini-2.5-flash..."
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {textProvider.apiKey && (
+                <Pressable
+                  style={[styles.discoverBtn, { borderColor: colors.border }]}
+                  onPress={() => discoverModels('text')}
+                  disabled={discoveringText}
+                >
+                  <Text style={[styles.discoverBtnText, { fontFamily: MONO, color: colors.primary }]}>
+                    {discoveringText ? 'SEARCHING…' : '🔍 FIND AVAILABLE MODELS'}
+                  </Text>
+                </Pressable>
+              )}
+            </>
+          )}
         </View>
 
         {/* Vision provider */}
@@ -426,15 +500,53 @@ export default function SetupScreen({ route, navigation }) {
           />
 
           <Text style={[styles.label, { color: colors.textMuted }]}>MODEL NAME</Text>
-          <TextInput
-            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
-            value={visionProvider.model}
-            onChangeText={(v) => setVisionProvider((p) => ({ ...p, model: v }))}
-            placeholder="gpt-4o-mini, gemini-2.5-flash, llava..."
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          {visionModels.length > 0 ? (
+            <View style={[styles.modelDropdown, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                {visionModels.map((m) => {
+                  const active = visionProvider.model === m.id;
+                  return (
+                    <Pressable
+                      key={m.id}
+                      style={[styles.modelOption, { borderBottomColor: colors.border }, active && { backgroundColor: colors.primary + '15' }]}
+                      onPress={() => setVisionProvider((p) => ({ ...p, model: m.id }))}
+                    >
+                      <Text style={[styles.modelOptionText, { fontFamily: MONO, color: active ? colors.primary : colors.text }]} numberOfLines={1}>
+                        {m.id}
+                      </Text>
+                      {active && <Text style={{ color: colors.primary, fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Pressable style={styles.modelDropdownClose} onPress={() => setVisionModels([])}>
+                <Text style={[styles.label, { color: colors.textMuted, marginBottom: 0 }]}>TYPE MANUALLY</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+                value={visionProvider.model}
+                onChangeText={(v) => setVisionProvider((p) => ({ ...p, model: v }))}
+                placeholder="gpt-4o-mini, gemini-2.5-flash, llava..."
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {visionProvider.apiKey && (
+                <Pressable
+                  style={[styles.discoverBtn, { borderColor: colors.border }]}
+                  onPress={() => discoverModels('vision')}
+                  disabled={discoveringVision}
+                >
+                  <Text style={[styles.discoverBtnText, { fontFamily: MONO, color: colors.primary }]}>
+                    {discoveringVision ? 'SEARCHING…' : '🔍 FIND AVAILABLE MODELS'}
+                  </Text>
+                </Pressable>
+              )}
+            </>
+          )}
         </View>
 
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
@@ -456,6 +568,174 @@ export default function SetupScreen({ route, navigation }) {
         </Pressable>
       </ScrollView>
       </KeyboardAvoidingView>
+    );
+  }
+
+  // ── Step: Diet ─────────────────────────────────────────────────────────
+  if (step === 'diet') {
+    const addProfile = async () => {
+      if (!dietName.trim() || !dietNeeds.trim()) return;
+      const p = await addDietaryProfile({ name: dietName.trim(), needs: dietNeeds.trim(), notes: dietNotes.trim() });
+      setProfiles((prev) => [...prev, p]);
+      setDietName('');
+      setDietNeeds('');
+      setDietNotes('');
+    };
+
+    return (
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <ScrollView
+        style={[styles.root, { paddingTop: insets.top + 20 }]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={[styles.stepTitle, { color: colors.text }]}>WHO'S EATING?</Text>
+        <Text style={[styles.stepSub, { color: colors.textMuted }]}>
+          Add yourself and household members with dietary needs. Terry will adjust recipes and meal plans to fit everyone. Skip if you and your household don't have any dietary needs.
+        </Text>
+
+        {/* Existing profiles */}
+        {profiles.map((p) => (
+          <View key={p.id} style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.profileHeader}>
+              <Text style={[styles.profileName, { color: colors.text }]}>{p.name}</Text>
+              <Pressable onPress={async () => {
+                const updated = await removeDietaryProfile(p.id);
+                setProfiles(updated);
+              }} hitSlop={8}>
+                <Text style={{ color: colors.danger, fontSize: 16, fontWeight: '700' }}>✕</Text>
+              </Pressable>
+            </View>
+            <Text style={[styles.profileNeeds, { fontFamily: MONO, color: colors.primary }]}>{p.needs}</Text>
+            {p.notes ? <Text style={[styles.profileNotes, { color: colors.textMuted }]}>{p.notes}</Text> : null}
+          </View>
+        ))}
+
+        {/* Add new */}
+        <View style={[styles.dietForm, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.label, { color: colors.textMuted }]}>NAME</Text>
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+            value={dietName}
+            onChangeText={setDietName}
+            placeholder="e.g. Sarah"
+            placeholderTextColor={colors.textMuted}
+          />
+          <Text style={[styles.label, { color: colors.textMuted }]}>DIETARY NEEDS</Text>
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+            value={dietNeeds}
+            onChangeText={setDietNeeds}
+            placeholder="e.g. gluten-free, dairy-free"
+            placeholderTextColor={colors.textMuted}
+            multiline
+          />
+          <Text style={[styles.label, { color: colors.textMuted }]}>NOTES (optional)</Text>
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+            value={dietNotes}
+            onChangeText={setDietNotes}
+            placeholder="e.g. allergies, dislikes"
+            placeholderTextColor={colors.textMuted}
+            multiline
+          />
+          <Pressable
+            style={[styles.addBtn, { borderColor: colors.primary }]}
+            onPress={addProfile}
+          >
+            <Text style={[styles.addBtnText, { fontFamily: MONO, color: colors.primary }]}>+ ADD PERSON</Text>
+          </Pressable>
+        </View>
+
+        <Pressable style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 20 }]} onPress={() => goNext('permissions')}>
+          <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]}>CONTINUE</Text>
+        </Pressable>
+        <Pressable onPress={() => goNext('permissions')} style={styles.skipBtn}>
+          <Text style={[styles.skipText, { fontFamily: MONO, color: colors.textMuted }]}>SKIP FOR NOW</Text>
+        </Pressable>
+      </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ── Step: Permissions ──────────────────────────────────────────────────
+  if (step === 'permissions') {
+    const requestNotif = async () => {
+      const status = await requestPermissionAndGetStatus();
+      setNotifStatus(status);
+      if (status === 'granted') {
+        try {
+          const token = await getPushToken();
+          if (token) await api.registerPushToken(token);
+        } catch {}
+      }
+    };
+    const requestCamera = async () => {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      setCameraStatus(status === 'granted' ? 'granted' : 'denied');
+    };
+
+    return (
+      <ScrollView
+        style={[styles.root, { paddingTop: insets.top + 20 }]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+      >
+        <Text style={[styles.stepTitle, { color: colors.text }]}>ALLOW PERMISSIONS</Text>
+        <Text style={[styles.stepSub, { color: colors.textMuted }]}>
+          Cegin needs a couple of permissions to work its best. You can change these later in Settings.
+        </Text>
+
+        {/* Notifications */}
+        <View style={[styles.permCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.permCardHeader}>
+            <Text style={styles.permIcon}>🔔</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permTitle, { color: colors.text }]}>Notifications</Text>
+              <Text style={[styles.permDesc, { color: colors.textMuted }]}>
+                Morning meal prep reminders and perishable ingredient alerts from Chef Terry.
+              </Text>
+            </View>
+          </View>
+          {notifStatus === 'granted' ? (
+            <View style={[styles.permBadge, { borderColor: colors.primary }]}>
+              <Text style={[styles.permBadgeText, { fontFamily: MONO, color: colors.primary }]}>ENABLED</Text>
+            </View>
+          ) : (
+            <Pressable style={[styles.permBtn, { backgroundColor: colors.primary }]} onPress={requestNotif}>
+              <Text style={[styles.permBtnText, { color: colors.onPrimary }]}>ENABLE</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* Camera */}
+        <View style={[styles.permCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.permCardHeader}>
+            <Text style={styles.permIcon}>📷</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permTitle, { color: colors.text }]}>Camera</Text>
+              <Text style={[styles.permDesc, { color: colors.textMuted }]}>
+                Scan recipes from photos and identify fridge items with Terry Vision.
+              </Text>
+            </View>
+          </View>
+          {cameraStatus === 'granted' ? (
+            <View style={[styles.permBadge, { borderColor: colors.primary }]}>
+              <Text style={[styles.permBadgeText, { fontFamily: MONO, color: colors.primary }]}>ENABLED</Text>
+            </View>
+          ) : (
+            <Pressable style={[styles.permBtn, { backgroundColor: colors.primary }]} onPress={requestCamera}>
+              <Text style={[styles.permBtnText, { color: colors.onPrimary }]}>ENABLE</Text>
+            </Pressable>
+          )}
+        </View>
+
+        <Pressable style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 24 }]} onPress={() => goNext('theme')}>
+          <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]}>CONTINUE</Text>
+        </Pressable>
+        <Pressable onPress={() => goNext('theme')} style={styles.skipBtn}>
+          <Text style={[styles.skipText, { fontFamily: MONO, color: colors.textMuted }]}>SKIP FOR NOW</Text>
+        </Pressable>
+      </ScrollView>
     );
   }
 
@@ -675,5 +955,34 @@ function makeStyles(c) {
     readyTitle: { fontSize: 26, fontWeight: '900', letterSpacing: 1, marginBottom: 8 },
     readySub: { fontSize: 13, letterSpacing: 1 },
     readyBottom: { alignItems: 'center' },
+
+    // Diet
+    profileCard: { borderWidth: 1.5, borderRadius: 12, padding: 14, marginBottom: 8 },
+    profileHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    profileName: { fontSize: 15, fontWeight: '900' },
+    profileNeeds: { fontSize: 12, letterSpacing: 0.5, marginTop: 4 },
+    profileNotes: { fontSize: 12, lineHeight: 18, marginTop: 4 },
+    dietForm: { borderWidth: 1.5, borderRadius: 14, padding: 16, marginTop: 12 },
+    addBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
+    addBtnText: { fontSize: 11, letterSpacing: 1 },
+
+    // Permissions
+    permCard: { borderWidth: 1.5, borderRadius: 14, padding: 18, marginBottom: 12 },
+    permCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+    permIcon: { fontSize: 28 },
+    permTitle: { fontSize: 15, fontWeight: '900' },
+    permDesc: { fontSize: 12, lineHeight: 18, marginTop: 4 },
+    permBadge: { borderWidth: 1.5, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+    permBadgeText: { fontSize: 11, letterSpacing: 1, fontWeight: '900' },
+    permBtn: { borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+    permBtnText: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+
+    // Model discovery
+    discoverBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 4, marginBottom: 8 },
+    discoverBtnText: { fontSize: 11, letterSpacing: 1, fontWeight: '700' },
+    modelDropdown: { borderWidth: 1.5, borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
+    modelOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1 },
+    modelOptionText: { fontSize: 13, flex: 1, marginRight: 8 },
+    modelDropdownClose: { paddingVertical: 10, alignItems: 'center', borderTopWidth: 1 },
   });
 }

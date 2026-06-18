@@ -11,11 +11,55 @@ const lookupAsync = promisify(dns.lookup);
 const TEXT_PROVIDER = readConfig('TEXT_PROVIDER', 'openai-compatible').toLowerCase();
 const TEXT_BASE_URL = readConfig('TEXT_BASE_URL') || readConfig('DEEPSEEK_API_URL') || 'https://api.deepseek.com/chat/completions';
 const TEXT_API_KEY = readSecret('TEXT_API_KEY') || readSecret('DEEPSEEK_API_KEY');
-const TEXT_MODEL = readConfig('TEXT_MODEL') || readConfig('DEEPSEEK_MODEL') || 'deepseek-chat';
+let TEXT_MODEL = readConfig('TEXT_MODEL') || readConfig('DEEPSEEK_MODEL') || 'deepseek-chat';
 
 const VISION_PROVIDER = readConfig('VISION_PROVIDER', 'gemini').toLowerCase();
 const VISION_API_KEY = readSecret('VISION_API_KEY') || readSecret('GOOGLE_API_KEY');
-const VISION_MODEL = readConfig('VISION_MODEL') || readConfig('GEMINI_MODEL') || 'gemini-2.5-flash';
+let VISION_MODEL = readConfig('VISION_MODEL') || readConfig('GEMINI_MODEL') || 'gemini-2.5-flash';
+
+// Allow runtime model changes from the app
+function setTextModel(model) { TEXT_MODEL = model; }
+function setVisionModel(model) { VISION_MODEL = model; }
+function getTextModel() { return TEXT_MODEL; }
+function getVisionModel() { return VISION_MODEL; }
+
+// Fetch available models from the configured provider's API
+async function fetchAvailableModels(type = 'text') {
+  const baseUrl = type === 'vision' ? null : TEXT_BASE_URL; // Vision uses Gemini which has a different API
+  const apiKey = type === 'vision' ? VISION_API_KEY : TEXT_API_KEY;
+
+  if (!apiKey) throw new Error('No API key configured');
+
+  // For OpenAI-compatible providers, hit /models
+  let url;
+  if (type === 'vision') {
+    // Gemini: list models via Google's API
+    url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`Gemini API returned ${res.status}`);
+    const data = await res.json();
+    return (data.models || [])
+      .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m) => ({ id: m.name.replace('models/', ''), name: m.displayName || m.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // OpenAI-compatible: normalize URL to hit /models
+  url = baseUrl.replace(/\/chat\/completions$/i, '').replace(/\/+$/, '');
+  if (!url.endsWith('/models')) url = `${url}/models`;
+
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`API returned ${res.status}`);
+  const data = await res.json();
+  const models = data.data || data.models || [];
+  return models
+    .map((m) => ({ id: m.id || m.name || '', name: m.id || m.name || '' }))
+    .filter((m) => m.id)
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
 
 function isConfigured() {
   return !!TEXT_API_KEY;
@@ -70,8 +114,25 @@ const BASE_PROMPT =
   "You are inside an app called Cegin — a personal recipe app where users save recipes, " +
   "plan meals, manage shopping lists, and track their cooking. Help them make the most of it.";
 
-function systemPrompt(userId) {
-  return `${BASE_PROMPT}\n\n${savedRecipesContext(userId)}`;
+function systemPrompt(userId, dietaryProfiles) {
+  let prompt = `${BASE_PROMPT}\n\n${savedRecipesContext(userId)}`;
+
+  if (dietaryProfiles?.length) {
+    const profileDescs = dietaryProfiles.map((p) => {
+      let desc = p.name ? `${p.name}` : 'Someone';
+      if (p.needs) desc += ` — dietary needs: ${p.needs}`;
+      if (p.notes) desc += ` (notes: ${p.notes})`;
+      return `- ${desc}`;
+    });
+    prompt +=
+      '\n\nDIETARY PROFILES (always respect these when suggesting recipes or meals):\n' +
+      profileDescs.join('\n') +
+      '\nWhen suggesting recipes, check ingredients against these profiles. ' +
+      'If a recipe needs modification for someone, mention it. ' +
+      'Do NOT ask about dietary needs if profiles are already provided — use them.';
+  }
+
+  return prompt;
 }
 
 async function callTextModel(messages, { json = false, temperature = 0.7 } = {}) {
@@ -158,8 +219,8 @@ async function callTextModel(messages, { json = false, temperature = 0.7 } = {})
 }
 
 // Freeform chat. `history` is the conversation so far ([{ role, content }]).
-async function chat(history, userId) {
-  const messages = [{ role: 'system', content: systemPrompt(userId) }, ...history];
+async function chat(history, userId, dietaryProfiles) {
+  const messages = [{ role: 'system', content: systemPrompt(userId, dietaryProfiles) }, ...history];
   return callTextModel(messages);
 }
 
@@ -1127,4 +1188,9 @@ module.exports = {
   estimateNutrition,
   generatePrepSteps,
   scanFridge,
+  setTextModel,
+  setVisionModel,
+  getTextModel,
+  getVisionModel,
+  fetchAvailableModels,
 };

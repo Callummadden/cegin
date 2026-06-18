@@ -9,7 +9,7 @@ const TABS = [
   { key: 'shopping', label: 'Shop', screen: 'ShoppingList', icon: 'cart-outline', iconActive: 'cart' },
   { key: 'recipes', label: 'Recipes', screen: 'RecipeList', icon: 'restaurant-outline', iconActive: 'restaurant' },
   { key: 'planner', label: 'Plan', screen: 'MealPlanner', icon: 'calendar-outline', iconActive: 'calendar' },
-  { key: 'cookbook', label: 'Kitchen Log', screen: 'Cookbook', icon: 'book-outline', iconActive: 'book' },
+  { key: 'cookbook', label: 'Log', screen: 'Cookbook', icon: 'book-outline', iconActive: 'book' },
 ];
 
 export default function BottomNav({ active, navigation }) {
@@ -64,8 +64,13 @@ export default function BottomNav({ active, navigation }) {
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: 16,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 40,
     paddingTop: 10,
+    zIndex: 10,
   },
   nav: {
     flexDirection: 'row',
@@ -74,11 +79,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 8,
     paddingHorizontal: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
   },
   tab: {
     flex: 1,

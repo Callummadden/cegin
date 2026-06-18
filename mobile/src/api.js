@@ -17,6 +17,7 @@ import * as localAi from './localAi';
 export { getServerUrl, setServerUrl };
 
 const REQUEST_TIMEOUT = 8000; // 8s — long enough for slow mobile, short enough to feel responsive
+const AI_REQUEST_TIMEOUT = 60000; // 60s — AI responses can take a while depending on the model
 
 async function request(path, options = {}) {
   const base = await getServerUrl();
@@ -25,7 +26,9 @@ async function request(path, options = {}) {
   }
   const headers = { 'Content-Type': 'application/json' };
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  const isAI = path.startsWith('/ai/') || path.startsWith('/ai?');
+  const timeout = isAI ? AI_REQUEST_TIMEOUT : REQUEST_TIMEOUT;
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
     const res = await fetch(`${base}/api${path}`, {
       ...options,
@@ -289,9 +292,15 @@ export const api = {
     if ((await getAppMode()) === 'local' || (await hasCustomAI())) return localAi.status();
     return request('/ai/status');
   },
-  aiChat: async (messages) => {
-    if ((await getAppMode()) === 'local' || (await hasCustomAI())) return localAi.chat(messages);
-    return request('/ai/chat', { method: 'POST', body: JSON.stringify({ messages }) });
+  aiModels: async (type = 'text') => {
+    return request(`/ai/models?type=${type}`);
+  },
+  aiSetModel: async (type, model) => {
+    return request('/ai/model', { method: 'POST', body: JSON.stringify({ type, model }) });
+  },
+  aiChat: async (messages, dietaryProfiles) => {
+    if ((await getAppMode()) === 'local' || (await hasCustomAI())) return localAi.chat(messages, dietaryProfiles);
+    return request('/ai/chat', { method: 'POST', body: JSON.stringify({ messages, dietaryProfiles }) });
   },
   aiRecipe: async (payload) => {
     if ((await getAppMode()) === 'local' || (await hasCustomAI())) return localAi.generateRecipe(payload);

@@ -132,6 +132,43 @@ export async function setCustomAIConfig({ text, vision }) {
   await Promise.all(tasks);
 }
 
+// ── Fetch available models from an OpenAI-compatible API ──────────────────
+
+export async function fetchAvailableModels(baseUrl, apiKey) {
+  if (!baseUrl || !apiKey) return [];
+
+  // Normalize the URL — strip trailing /chat/completions, /v1, etc.
+  let url = baseUrl.replace(/\/+$/, '');
+  // If it ends with /chat/completions, strip that
+  url = url.replace(/\/chat\/completions$/i, '');
+  // If it ends with /v1 or /v2, keep it — models endpoint is /v1/models
+  if (!/\/v\d+$/.test(url)) {
+    // Try to detect if we need to append /v1
+    // Most providers expect the base to already include the version
+  }
+
+  const modelsUrl = `${url}/models`;
+
+  try {
+    const res = await fetch(modelsUrl, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const models = data.data || data.models || [];
+    return models
+      .map((m) => ({
+        id: m.id || m.name || '',
+        name: m.id || m.name || '',
+      }))
+      .filter((m) => m.id)
+      .sort((a, b) => a.id.localeCompare(b.id));
+  } catch {
+    return [];
+  }
+}
+
 export async function hasCustomAI() {
   const cfg = await getCustomAIConfig();
   return !!(cfg.text || cfg.vision);

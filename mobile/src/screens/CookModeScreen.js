@@ -644,7 +644,7 @@ export default function CookModeScreen({ route, navigation }) {
       <>
       <View style={[styles.aiBar, { paddingBottom: Math.max(insets.bottom, 10), borderTopColor: colors.border }]}>
           <Pressable
-            style={[styles.panicBtn, { backgroundColor: colors.danger }]}
+            style={[styles.panicBtn, { backgroundColor: '#DC2626' }]}
             onPress={() => openPanel('panic')}
           >
             <Text style={styles.panicBtnText}>🔥 SOMETHING'S WRONG</Text>

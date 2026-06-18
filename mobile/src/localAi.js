@@ -233,8 +233,29 @@ async function deepseekChat(messages, { json = false } = {}) {
 
 // ── Exported Functions (now use user-chosen providers when configured) ─────
 
-export async function chat(messages) {
-  const content = await callTextModel(messages);
+export async function chat(messages, dietaryProfiles) {
+  // If dietary profiles are provided, inject a system message with them
+  const msgs = [...messages];
+  if (dietaryProfiles?.length) {
+    const profileDescs = dietaryProfiles.map((p) => {
+      let desc = p.name ? `${p.name}` : 'Someone';
+      if (p.needs) desc += ` — dietary needs: ${p.needs}`;
+      if (p.notes) desc += ` (notes: ${p.notes})`;
+      return `- ${desc}`;
+    });
+    const systemMsg = {
+      role: 'system',
+      content:
+        'DIETARY PROFILES (always respect these when suggesting recipes or meals):\n' +
+        profileDescs.join('\n') +
+        '\nWhen suggesting recipes, check ingredients against these profiles. ' +
+        'If a recipe needs modification for someone, mention it. ' +
+        'Do NOT ask about dietary needs if profiles are already provided — use them.',
+    };
+    // Insert system message at the beginning
+    msgs.unshift(systemMsg);
+  }
+  const content = await callTextModel(msgs);
   return { reply: content };
 }
 

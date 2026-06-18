@@ -138,7 +138,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Google OAuth redirect flow (server-side)
 app.get('/auth/google/redirect', (req, res) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientId = readConfig('GOOGLE_CLIENT_ID');
   if (!clientId) return res.status(503).json({ error: 'Google Sign-In not configured' });
   const redirectUri = encodeURIComponent(process.env.REDIRECT_URI || `${process.env.APP_URL || 'http://localhost:3000'}/auth/google/callback`);
   const scope = encodeURIComponent('openid email profile');
@@ -150,8 +150,8 @@ app.get('/auth/google/redirect', (req, res) => {
 app.get('/auth/google/callback', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).send('No code provided');
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = readConfig('GOOGLE_CLIENT_ID');
+  const clientSecret = readSecret('GOOGLE_CLIENT_SECRET');
   const redirectUri = process.env.REDIRECT_URI || `${process.env.APP_URL || 'http://localhost:3000'}/auth/google/callback`;
   try {
     // S2-5: URL-encode all body parameters
@@ -202,8 +202,8 @@ app.post('/api/auth/google', async (req, res) => {
 
     if (idToken) {
       // Native Google Sign-In — verify the ID token properly using google-auth-library
-      const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-      const ticket = await client.verifyIdToken({ idToken, audience: process.env.GOOGLE_CLIENT_ID });
+      const client = new OAuth2Client(readConfig('GOOGLE_CLIENT_ID'));
+      const ticket = await client.verifyIdToken({ idToken, audience: readConfig('GOOGLE_CLIENT_ID') });
       const payload = ticket.getPayload();
       if (!payload.email) return res.status(401).json({ error: 'No email in token' });
       if (!payload.email_verified) return res.status(401).json({ error: 'Email not verified' });
@@ -245,19 +245,43 @@ app.get('/api/auth/me', authMiddleware(dbModule), (req, res) => {
 app.get('/api/ai/status', (req, res) => {
   res.json({
     configured: ai.isConfigured(),
-    textModel: process.env.TEXT_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-chat',
-    visionModel: process.env.VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    textModel: ai.getTextModel(),
+    visionModel: ai.getVisionModel(),
   });
 });
 
-// Freeform cooking chat. Body: { messages: [{ role, content }] }
+// Fetch available models from the configured provider
+app.get('/api/ai/models', async (req, res) => {
+  const type = req.query.type === 'vision' ? 'vision' : 'text';
+  try {
+    const models = await ai.fetchAvailableModels(type);
+    res.json({ models });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Change the active model at runtime
+app.post('/api/ai/model', (req, res) => {
+  const { type, model } = req.body;
+  if (!model) return res.status(400).json({ error: 'model is required' });
+  if (type === 'vision') {
+    ai.setVisionModel(model);
+  } else {
+    ai.setTextModel(model);
+  }
+  res.json({ ok: true, textModel: ai.getTextModel(), visionModel: ai.getVisionModel() });
+});
+
+// Freeform cooking chat. Body: { messages: [{ role, content }], dietaryProfiles?: [...] }
 app.post('/api/ai/chat', async (req, res) => {
   const messages = req.body.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages array is required' });
   }
   try {
-    const reply = await ai.chat(messages, req.user?.id);
+    const { dietaryProfiles } = req.body;
+    const reply = await ai.chat(messages, req.user?.id, dietaryProfiles);
     res.json({ reply });
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });

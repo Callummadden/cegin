@@ -452,7 +452,7 @@ const makeStyles = (colors) => StyleSheet.create({
   emptyEmoji: { fontSize: 64, marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
   emptyHint: { fontSize: 11, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 },
-  list: { padding: 20, paddingBottom: 40 },
+  list: { padding: 20, paddingBottom: 100 },
   card: {
     borderWidth: 1.5,
     borderRadius: 16,
