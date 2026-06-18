@@ -714,6 +714,31 @@ app.put('/api/scanned-items/:id/consume', (req, res) => {
   res.json({ ok: true });
 });
 
+// --- Cook Stats (kitchen log, streaks) ---
+
+app.get('/api/stats', (req, res) => {
+  const userId = req.user?.id || 0;
+  const stats = dbModule.getStats(userId);
+  const streak = dbModule.getCookingStreak(userId);
+  const topRecipes = dbModule.getTopRecipes(userId, 5);
+  res.json({ ...stats, streak, topRecipes });
+});
+
+app.post('/api/stats/record', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { recipeId, recipeTitle, stepCount } = req.body;
+  if (!recipeId) return res.status(400).json({ error: 'recipeId required' });
+  const stats = dbModule.recordCook(userId, recipeId, recipeTitle || '', stepCount || 0);
+  const streak = dbModule.getCookingStreak(userId);
+  res.json({ ...stats, streak });
+});
+
+app.delete('/api/stats', (req, res) => {
+  const userId = req.user?.id || 0;
+  dbModule.clearStats(userId);
+  res.json({ ok: true });
+});
+
 // S2-10: Express error handler middleware (must be last)
 app.use((err, req, res, next) => {
   console.error(err);

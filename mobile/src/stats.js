@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from './api';
+import { getAppMode } from './config';
 
 const STATS_KEY = 'cegin_stats';
 const COOK_DATES_KEY = 'cegin_cook_dates';
@@ -12,8 +14,32 @@ const defaults = {
   totalSteps: 0,
 };
 
+async function isServerMode() {
+  const mode = await getAppMode();
+  return mode === 'server';
+}
+
 export async function getStats() {
   if (_cache) return _cache;
+
+  if (await isServerMode()) {
+    try {
+      const server = await api.getStats();
+      if (server) {
+        _cache = {
+          cookCount: server.cookCount || 0,
+          totalSteps: server.totalSteps || 0,
+          recipeCookCounts: server.recipeCookCounts || {},
+          streak: server.streak || 0,
+          topRecipes: server.topRecipes || [],
+        };
+        return _cache;
+      }
+    } catch {
+      // Server offline — fall through to local
+    }
+  }
+
   const raw = await AsyncStorage.getItem(STATS_KEY);
   try {
     _cache = raw ? { ...defaults, ...JSON.parse(raw) } : { ...defaults };
@@ -29,6 +55,25 @@ async function save(stats) {
 }
 
 export async function recordCook(recipeId, recipeTitle, stepCount) {
+  // Record on server if in server mode
+  if (await isServerMode()) {
+    try {
+      const server = await api.recordCook(recipeId, recipeTitle, stepCount);
+      if (server) {
+        _cache = {
+          cookCount: server.cookCount || 0,
+          totalSteps: server.totalSteps || 0,
+          recipeCookCounts: server.recipeCookCounts || {},
+          streak: server.streak || 0,
+        };
+        return;
+      }
+    } catch {
+      // Server offline — fall through to local
+    }
+  }
+
+  // Local mode or server offline
   const stats = await getStats();
   stats.cookCount += 1;
   stats.totalSteps += stepCount;
@@ -36,7 +81,7 @@ export async function recordCook(recipeId, recipeTitle, stepCount) {
     stats.recipeCookCounts[recipeId] = { title: recipeTitle, count: 0 };
   }
   stats.recipeCookCounts[recipeId].count += 1;
-  stats.recipeCookCounts[recipeId].title = recipeTitle; // update title in case it changed
+  stats.recipeCookCounts[recipeId].title = recipeTitle;
   await save(stats);
 
   // Record cook date for streak tracking
@@ -49,29 +94,35 @@ async function recordCookDate() {
   const raw = await AsyncStorage.getItem(COOK_DATES_KEY);
   let dates;
   try { dates = raw ? JSON.parse(raw) : []; } catch { dates = []; }
-  // Add today if not already present
   if (!dates.includes(today)) {
     dates.push(today);
-    // Keep only last 90 days to avoid unbounded growth
     if (dates.length > 90) dates = dates.slice(-90);
     await AsyncStorage.setItem(COOK_DATES_KEY, JSON.stringify(dates));
   }
 }
 
 export async function getCookingStreak() {
+  // Server mode — streak comes from getStats()
+  if (await isServerMode()) {
+    try {
+      const stats = await getStats();
+      return stats.streak || 0;
+    } catch {
+      // Fall through to local
+    }
+  }
+
   const raw = await AsyncStorage.getItem(COOK_DATES_KEY);
   let dates;
   try { dates = raw ? JSON.parse(raw) : []; } catch { dates = []; }
   if (dates.length === 0) return 0;
 
-  // Sort dates descending
   const sorted = [...dates].sort().reverse();
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const yDate = new Date(Date.now() - 86400000);
   const yesterday = `${yDate.getFullYear()}-${String(yDate.getMonth()+1).padStart(2,'0')}-${String(yDate.getDate()).padStart(2,'0')}`;
 
-  // Streak must include today or yesterday to be active
   if (sorted[0] !== today && sorted[0] !== yesterday) return 0;
 
   let streak = 1;
@@ -89,6 +140,16 @@ export async function getCookingStreak() {
 }
 
 export async function getTopRecipes(limit = 5) {
+  // Server mode — top recipes come from getStats()
+  if (await isServerMode()) {
+    try {
+      const stats = await getStats();
+      return (stats.topRecipes || []).slice(0, limit);
+    } catch {
+      // Fall through to local
+    }
+  }
+
   const stats = await getStats();
   return Object.entries(stats.recipeCookCounts)
     .map(([id, { title, count }]) => ({ id, title, count }))
@@ -98,5 +159,12 @@ export async function getTopRecipes(limit = 5) {
 
 export async function clearStats() {
   _cache = { ...defaults };
+
+  if (await isServerMode()) {
+    try {
+      await api.clearStats();
+    } catch {}
+  }
+
   await AsyncStorage.multiRemove([STATS_KEY, COOK_DATES_KEY]);
 }

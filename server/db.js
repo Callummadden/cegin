@@ -589,6 +589,114 @@ function getExpiredItems(userId) {
   `).all(userId);
 }
 
+// ─── Cook Stats (kitchen log, streaks, cook counts) ─────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cook_stats (
+    user_id INTEGER PRIMARY KEY,
+    cook_count INTEGER DEFAULT 0,
+    total_steps INTEGER DEFAULT 0,
+    recipe_cook_counts TEXT DEFAULT '{}',
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cook_dates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    cook_date TEXT NOT NULL,
+    UNIQUE(user_id, cook_date)
+  )
+`);
+
+function getStats(userId) {
+  const uid = userId || 0;
+  const row = db.prepare('SELECT * FROM cook_stats WHERE user_id = ?').get(uid);
+  if (!row) return { cookCount: 0, totalSteps: 0, recipeCookCounts: {} };
+  let recipeCookCounts;
+  try { recipeCookCounts = JSON.parse(row.recipe_cook_counts); } catch { recipeCookCounts = {}; }
+  return { cookCount: row.cook_count, totalSteps: row.total_steps, recipeCookCounts };
+}
+
+function getCookDates(userId) {
+  const uid = userId || 0;
+  return db.prepare('SELECT cook_date FROM cook_dates WHERE user_id = ? ORDER BY cook_date DESC').all(uid).map(r => r.cook_date);
+}
+
+function recordCook(userId, recipeId, recipeTitle, stepCount) {
+  const uid = userId || 0;
+  const stats = getStats(uid);
+
+  // Update stats
+  const newCookCount = stats.cookCount + 1;
+  const newTotalSteps = stats.totalSteps + (stepCount || 0);
+  const counts = { ...stats.recipeCookCounts };
+  if (!counts[recipeId]) counts[recipeId] = { title: recipeTitle, count: 0 };
+  counts[recipeId].count += 1;
+  counts[recipeId].title = recipeTitle;
+
+  db.prepare(`
+    INSERT INTO cook_stats (user_id, cook_count, total_steps, recipe_cook_counts, updated_at)
+    VALUES (@user_id, @cook_count, @total_steps, @recipe_cook_counts, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET
+      cook_count = @cook_count,
+      total_steps = @total_steps,
+      recipe_cook_counts = @recipe_cook_counts,
+      updated_at = datetime('now')
+  `).run({
+    user_id: uid,
+    cook_count: newCookCount,
+    total_steps: newTotalSteps,
+    recipe_cook_counts: JSON.stringify(counts),
+  });
+
+  // Record cook date
+  const today = new Date().toISOString().split('T')[0];
+  db.prepare('INSERT OR IGNORE INTO cook_dates (user_id, cook_date) VALUES (?, ?)').run(uid, today);
+
+  return getStats(uid);
+}
+
+function getCookingStreak(userId) {
+  const dates = getCookDates(userId);
+  if (dates.length === 0) return 0;
+
+  const today = new Date().toISOString().split('T')[0];
+  const yDate = new Date(Date.now() - 86400000);
+  const yesterday = yDate.toISOString().split('T')[0];
+
+  // Streak must include today or yesterday to be active
+  if (dates[0] !== today && dates[0] !== yesterday) return 0;
+
+  let streak = 1;
+  for (let i = 1; i < dates.length; i++) {
+    const prev = new Date(dates[i - 1]);
+    const curr = new Date(dates[i]);
+    const diffDays = Math.round((prev - curr) / 86400000);
+    if (diffDays === 1) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+function clearStats(userId) {
+  const uid = userId || 0;
+  db.prepare('DELETE FROM cook_stats WHERE user_id = ?').run(uid);
+  db.prepare('DELETE FROM cook_dates WHERE user_id = ?').run(uid);
+}
+
+function getTopRecipes(userId, limit = 5) {
+  const stats = getStats(userId);
+  return Object.entries(stats.recipeCookCounts)
+    .map(([id, { title, count }]) => ({ id, title, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
 // Get all users who have notification subscriptions with push tokens
 function getSubscribedUsers() {
   return db.prepare(`
@@ -620,4 +728,6 @@ module.exports = {
   syncMealPlan, getMealPlan, getTodayMeals,
   // Scanned items
   addScannedItem, getScannedItems, markItemConsumed, getExpiringItems, getExpiredItems,
+  // Cook stats
+  getStats, getCookDates, recordCook, getCookingStreak, clearStats, getTopRecipes,
 };

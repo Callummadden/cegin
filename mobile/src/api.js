@@ -469,6 +469,23 @@ export const api = {
     return request('/meal-plan/sync', { method: 'POST', body: JSON.stringify({ plan }) });
   },
 
+  // Cook stats (kitchen log, streaks)
+  getStats: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/stats');
+  },
+  recordCook: async (recipeId, recipeTitle, stepCount) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/stats/record', { method: 'POST', body: JSON.stringify({ recipeId, recipeTitle, stepCount }) });
+  },
+  clearStats: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/stats', { method: 'DELETE' });
+  },
+
   // Scanned items (from Terry Vision fridge scans)
   getScannedItems: async (all = false) => {
     const mode = await getAppMode();
