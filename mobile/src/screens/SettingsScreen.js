@@ -16,6 +16,7 @@ import { getPermissionStatus, requestPermissionAndGetStatus, getPushToken } from
 import { api, getServerUrl, setServerUrl } from '../api';
 import { getAppMode, getDeepSeekKey, setDeepSeekKey, getGoogleKey, setGoogleKey, getCustomAIConfig, setCustomAIConfig, fetchAvailableModels } from '../config';
 import { MONO, useTheme, THEME_LIST, OLED_ACCENTS } from '../theme';
+import Constants from 'expo-constants';
 
 // Preview swatch colors for each theme
 const THEME_PREVIEWS = {
@@ -416,7 +417,7 @@ export default function SettingsScreen({ navigation }) {
                 </Text>
               </View>
               <Pressable onPress={handleVersionTap} style={[styles.versionBadge, { borderColor: colors.border }]}>
-                <Text style={[styles.versionText, { fontFamily: MONO, color: colors.primary }]}>v1.1.0</Text>
+                <Text style={[styles.versionText, { fontFamily: MONO, color: colors.primary }]}>v{Constants.expoConfig?.version || '1.1.2'}</Text>
               </Pressable>
             </View>
             <View style={[styles.aboutMeta, { borderTopColor: colors.border }]}>
