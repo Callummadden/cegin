@@ -6,6 +6,7 @@ import {
   Dimensions,
   Easing,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Pressable,
@@ -821,6 +822,7 @@ export default function RecipeListScreen({ navigation }) {
         animationType="fade"
         onRequestClose={() => setNewCollectionModal(false)}
       >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <View style={styles.newColOverlay}>
           <View style={[styles.newColCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.newColTitle, { color: colors.text }]}>NEW COLLECTION</Text>
@@ -864,6 +866,7 @@ export default function RecipeListScreen({ navigation }) {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Long-press context menu */}

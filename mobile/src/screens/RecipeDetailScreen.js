@@ -20,7 +20,7 @@ import { api } from '../api';
 import { MONO, useTheme } from '../theme';
 import AppModal from '../components/AppModal';
 import AiDisclaimer from '../components/AiDisclaimer';
-import { setStringAsync as setClipboardString } from 'expo-clipboard';
+
 import { getFavorites, toggleFavorite } from '../favorites';
 import { scaleIngredients } from '../utils/scaleIngredients';
 import { heroCardColors, hashStr } from '../utils/heroColors';
@@ -273,22 +273,6 @@ export default function RecipeDetailScreen({ route, navigation }) {
     } catch {}
   };
 
-  const copyRecipe = async () => {
-    try {
-      await setClipboardString(buildRecipeText());
-      setModal({
-        title: 'Copied',
-        message: 'Recipe copied to clipboard.',
-        buttons: [{ text: 'OK', primary: true }],
-      });
-    } catch (e) {
-      setModal({
-        title: 'Error',
-        message: e.message,
-        buttons: [{ text: 'OK', primary: true }],
-      });
-    }
-  };
 
   const cardBgs = useMemo(() => heroCardColors(colors), [colors]);
 
@@ -455,21 +439,13 @@ export default function RecipeDetailScreen({ route, navigation }) {
             <Text style={[styles.desc, { color: colors.textMuted }]}>{recipe.description}</Text>
           )}
 
-          {/* Share / Copy buttons near title */}
-          <View style={styles.shareRow}>
-            <Pressable
-              style={[styles.shareBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-              onPress={shareRecipe}
-            >
-              <Text style={[styles.shareBtnText, { fontFamily: MONO, color: colors.text2 }]}>↗ SHARE</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.shareBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-              onPress={copyRecipe}
-            >
-              <Text style={[styles.shareBtnText, { fontFamily: MONO, color: colors.text2 }]}>⧉ COPY RECIPE</Text>
-            </Pressable>
-          </View>
+          {/* Share button */}
+          <Pressable
+            style={[styles.shareBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            onPress={shareRecipe}
+          >
+            <Text style={[styles.shareBtnText, { fontFamily: MONO, color: colors.text2 }]}>↗ SHARE</Text>
+          </Pressable>
 
           {/* Notes */}
           {!!recipe.notes && (
@@ -1006,7 +982,7 @@ const makeStyles = (colors) => StyleSheet.create({
   actionBtnText: { fontWeight: '700', fontSize: 13, letterSpacing: 1 },
   ctaWrap: { paddingHorizontal: 16, paddingVertical: 10 },
   cta: { borderRadius: 28, paddingVertical: 17, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
-  shareRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+
   shareBtn: {
     borderWidth: 1.5,
     borderRadius: 8,

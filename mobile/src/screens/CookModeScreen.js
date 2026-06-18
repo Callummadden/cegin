@@ -4,7 +4,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -661,7 +660,7 @@ export default function CookModeScreen({ route, navigation }) {
       <Modal visible={!!panel} animationType="slide" transparent onRequestClose={closePanel}>
         <KeyboardAvoidingView
           style={styles.modalFlex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
         >
           <Pressable style={styles.modalOverlay} onPress={closePanel} />
           <View style={[styles.panel, { backgroundColor: colors.surface }]}>

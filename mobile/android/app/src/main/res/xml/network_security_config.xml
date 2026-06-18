@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext HTTP allowed for self-hosted servers on LAN and VPN.
+     The app connects to user-supplied IPs/domains over their own network.
+     usesCleartextTraffic="true" in AndroidManifest.xml is the primary gate. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
