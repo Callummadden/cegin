@@ -29,17 +29,21 @@ async function request(path, options = {}) {
   const isAI = path.startsWith('/ai/') || path.startsWith('/ai?');
   const timeout = isAI ? AI_REQUEST_TIMEOUT : REQUEST_TIMEOUT;
   const timer = setTimeout(() => controller.abort(), timeout);
+  const url = `${base}/api${path}`;
   try {
-    const res = await fetch(`${base}/api${path}`, {
+    console.log(`[API] ${options.method || 'GET'} ${url}`);
+    const res = await fetch(url, {
       ...options,
       headers: { ...headers, ...options.headers },
       signal: controller.signal,
     });
     clearTimeout(timer);
     if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      console.error(`[API] ${res.status} ${url}: ${errorText}`);
       let message = `Request failed (${res.status})`;
       try {
-        const body = await res.json();
+        const body = JSON.parse(errorText);
         if (body.error) message = body.error;
       } catch {}
       throw new Error(message);
@@ -49,8 +53,10 @@ async function request(path, options = {}) {
   } catch (e) {
     clearTimeout(timer);
     if (e.name === 'AbortError') {
+      console.error(`[API] Timeout ${url}`);
       throw new Error('Server unreachable — working offline');
     }
+    console.error(`[API] Error ${url}:`, e.message);
     throw e;
   }
 }
