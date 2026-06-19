@@ -781,9 +781,12 @@
           <p>Pull from Docker Hub, add your API keys, and launch on your LAN machine.</p>
           <div class="code-block">git clone https://github.com/Callummadden/cegin.git
 cd cegin/server
+cp .env.example .env
 mkdir -p secrets && chmod 700 secrets
-echo "your-key" > secrets/TEXT_API_KEY
+echo "your-text-key" > secrets/TEXT_API_KEY
+echo "your-vision-key" > secrets/VISION_API_KEY
 echo "random-string" > secrets/JWT_SECRET
+chmod 600 secrets/*
 docker compose up -d</div>
         </article>
         <article class="step-card">
