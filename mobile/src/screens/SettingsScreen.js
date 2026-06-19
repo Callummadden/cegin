@@ -392,30 +392,7 @@ export default function SettingsScreen({ navigation }) {
   };
 
   const handleDevToggle = async () => {
-    if (devOpen) {
-      setDevOpen(false);
-      return;
-    }
-    const seen = await AsyncStorage.getItem('dev_warning_seen');
-    if (seen) {
-      setDevOpen(true);
-    } else {
-      showModal(
-        'Developer Settings',
-        'These settings are for connecting to a self-hosted server and configuring the AI backend. Only change these if you know what you\'re doing.',
-        [
-          { text: 'CANCEL' },
-          {
-            text: 'I UNDERSTAND',
-            primary: true,
-            onPress: async () => {
-              await AsyncStorage.setItem('dev_warning_seen', '1');
-              setDevOpen(true);
-            },
-          },
-        ],
-      );
-    }
+    setDevOpen(!devOpen);
   };
 
   const handleAddProfile = async (data) => {
