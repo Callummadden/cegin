@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { api } from './api';
 import { getAppMode, getServerUrl } from './config';
 
@@ -16,11 +16,19 @@ async function isServerMode() {
 async function imageToBase64(uri) {
   if (!uri) return null;
   try {
+    // Check file exists first
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists) {
+      console.log('[Cookbook] Image file does not exist:', uri);
+      return null;
+    }
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
+    console.log('[Cookbook] Image converted to base64, length:', base64.length);
     return base64;
-  } catch {
+  } catch (e) {
+    console.error('[Cookbook] Failed to convert image to base64:', e.message);
     return null;
   }
 }
@@ -87,9 +95,12 @@ export async function addCookbookEntry(entry) {
       // Convert image to base64 for upload
       let imageBase64 = null;
       if (newEntry.imageUri) {
+        console.log('[Cookbook] Converting image to base64:', newEntry.imageUri);
         imageBase64 = await imageToBase64(newEntry.imageUri);
+        console.log('[Cookbook] Base64 result:', imageBase64 ? `${imageBase64.length} chars` : 'null');
       }
 
+      console.log('[Cookbook] Sending to server...');
       const server = await api.addCookbookEntry({
         id: newEntry.id,
         recipeId: newEntry.recipeId,
@@ -98,6 +109,7 @@ export async function addCookbookEntry(entry) {
         date: newEntry.date,
         notes: newEntry.notes,
       });
+      console.log('[Cookbook] Server response:', server);
       if (server) {
         // Resolve server image path to full URL
         const resolved = (await resolveEntries([server]))[0];
