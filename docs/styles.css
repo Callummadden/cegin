@@ -240,6 +240,12 @@ a:hover {
   margin: 0 0 32px;
 }
 
+.pronunciation {
+  font-size: 0.85em;
+  color: var(--text3);
+  font-style: italic;
+}
+
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
