@@ -867,9 +867,26 @@ body.theme-panel-open {
 }
 
 .terry-avatar-wrap img {
-  width: min(340px, 90%);
+  width: min(280px, 80%);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  animation: terry-float 4s ease-in-out infinite, terry-glow 3s ease-in-out infinite alternate;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.terry-avatar-wrap img:hover {
+  transform: scale(1.05) rotate(-2deg);
+  box-shadow: 0 12px 40px rgba(255, 90, 38, 0.3);
+}
+
+@keyframes terry-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes terry-glow {
+  0% { box-shadow: var(--shadow), 0 0 20px rgba(255, 90, 38, 0); }
+  100% { box-shadow: var(--shadow), 0 0 30px rgba(255, 90, 38, 0.15); }
 }
 
 .terry-chat {
