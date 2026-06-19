@@ -624,13 +624,13 @@ app.delete('/api/images/:id', (req, res) => {
 // --- Notification Settings ---
 
 app.get('/api/notifications/settings', (req, res) => {
-  const sub = dbModule.getNotificationSubscription(req.user.id);
+  const sub = dbModule.getNotificationSubscription(req.user?.id || 0);
   res.json(sub || { morning_digest: 1, perishable_alerts: 1 });
 });
 
 app.put('/api/notifications/settings', (req, res) => {
   const { morning_digest, perishable_alerts } = req.body;
-  const sub = dbModule.upsertNotificationSubscription(req.user.id, {
+  const sub = dbModule.upsertNotificationSubscription(req.user?.id || 0, {
     morning_digest: morning_digest !== undefined ? (morning_digest ? 1 : 0) : undefined,
     perishable_alerts: perishable_alerts !== undefined ? (perishable_alerts ? 1 : 0) : undefined,
   });
@@ -641,7 +641,7 @@ app.put('/api/notifications/settings', (req, res) => {
 app.post('/api/notifications/register', (req, res) => {
   const { token, deviceName } = req.body;
   if (!token) return res.status(400).json({ error: 'token is required' });
-  const saved = dbModule.registerPushToken(req.user.id, token, deviceName);
+  const saved = dbModule.registerPushToken(req.user?.id || 0, token, deviceName);
   res.json(saved);
 });
 
@@ -655,7 +655,7 @@ app.post('/api/notifications/unregister', (req, res) => {
 
 // Test notification — sends a test push to this user's devices
 app.post('/api/notifications/test', async (req, res) => {
-  const tokens = dbModule.getUserPushTokens(req.user.id);
+  const tokens = dbModule.getUserPushTokens(req.user?.id || 0);
   if (tokens.length === 0) {
     return res.status(400).json({ error: 'No push tokens registered. Open the app and grant notification permission first.' });
   }
@@ -670,7 +670,7 @@ app.post('/api/notifications/test', async (req, res) => {
 // --- Meal Plan Sync ---
 
 app.get('/api/meal-plan', (req, res) => {
-  const plan = dbModule.getMealPlan(req.user.id);
+  const plan = dbModule.getMealPlan(req.user?.id || 0);
   res.json(plan);
 });
 
@@ -679,7 +679,7 @@ app.post('/api/meal-plan/sync', (req, res) => {
   if (!plan || typeof plan !== 'object') {
     return res.status(400).json({ error: 'plan object is required' });
   }
-  const synced = dbModule.syncMealPlan(req.user.id, plan);
+  const synced = dbModule.syncMealPlan(req.user?.id || 0, plan);
   res.json(synced);
 });
 
@@ -687,7 +687,7 @@ app.post('/api/meal-plan/sync', (req, res) => {
 
 app.get('/api/scanned-items', (req, res) => {
   const includeConsumed = req.query.all === 'true';
-  const items = dbModule.getScannedItems(req.user.id, includeConsumed);
+  const items = dbModule.getScannedItems(req.user?.id || 0, includeConsumed);
   res.json(items);
 });
 
@@ -701,7 +701,7 @@ app.post('/api/scanned-items', (req, res) => {
     const name = typeof item === 'string' ? item : item.name || item.item_name;
     const expiresAt = item.expires_at || item.expiresAt || null;
     if (name) {
-      created.push(dbModule.addScannedItem(req.user.id, name, expiresAt));
+      created.push(dbModule.addScannedItem(req.user?.id || 0, name, expiresAt));
     }
   }
   res.status(201).json(created);
@@ -710,7 +710,7 @@ app.post('/api/scanned-items', (req, res) => {
 app.put('/api/scanned-items/:id/consume', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'Invalid item ID' });
-  if (!dbModule.markItemConsumed(id, req.user.id)) {
+  if (!dbModule.markItemConsumed(id, req.user?.id || 0)) {
     return res.status(404).json({ error: 'Item not found' });
   }
   res.json({ ok: true });

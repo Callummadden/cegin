@@ -1,13 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './api';
+import { getAppMode } from './config';
 
 const KEY = 'cegin_meal_plan';
 
 // { "2026-06-13": { breakfast: recipeId, lunch: recipeId, dinner: recipeId }, ... }
 let _cache = null;
 
+async function isServerMode() {
+  const mode = await getAppMode();
+  return mode === 'server';
+}
+
 export async function getMealPlan() {
   if (_cache) return _cache;
+
+  if (await isServerMode()) {
+    try {
+      const server = await api.getMealPlan();
+      if (server && typeof server === 'object') {
+        _cache = server;
+        await AsyncStorage.setItem(KEY, JSON.stringify(server));
+        return _cache;
+      }
+    } catch {
+      // Server offline — fall through to local
+    }
+  }
+
   try {
     const raw = await AsyncStorage.getItem(KEY);
     _cache = raw ? JSON.parse(raw) : {};
@@ -25,18 +45,22 @@ export function getCachedPlan() {
 async function save(plan) {
   _cache = plan;
   await AsyncStorage.setItem(KEY, JSON.stringify(plan));
-  // Sync to server so Chef Terry's cron can send morning digests
-  try {
-    await api.syncMealPlan(plan);
-  } catch {
-    // Server offline — plan is still saved locally, will sync next time
+  // Sync to server
+  if (await isServerMode()) {
+    try {
+      await api.syncMealPlan(plan);
+    } catch {
+      // Server offline — plan is still saved locally
+    }
   }
 }
 
 export async function clearMealPlan() {
   _cache = {};
   await AsyncStorage.removeItem(KEY);
-  try { await api.syncMealPlan({}); } catch {}
+  if (await isServerMode()) {
+    try { await api.syncMealPlan({}); } catch {}
+  }
   return {};
 }
 
