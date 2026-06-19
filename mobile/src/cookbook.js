@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { api } from './api';
-import { getAppMode } from './config';
+import { getAppMode, getServerUrl } from './config';
 
 const KEY = 'cegin_cookbook';
 
@@ -25,6 +25,25 @@ async function imageToBase64(uri) {
   }
 }
 
+// Resolve relative server paths to full URLs
+function resolveImageUri(uri) {
+  if (!uri) return null;
+  // Already a full URL or local file
+  if (uri.startsWith('http') || uri.startsWith('file://') || uri.startsWith('content://')) return uri;
+  // Relative server path — prepend server URL
+  return getServerUrl().then(base => base ? `${base}${uri}` : uri);
+}
+
+async function resolveEntries(entries) {
+  const base = await getServerUrl();
+  return entries.map(e => ({
+    ...e,
+    imageUri: e.imageUri && !e.imageUri.startsWith('http') && !e.imageUri.startsWith('file://') && !e.imageUri.startsWith('content://')
+      ? `${base}${e.imageUri}`
+      : e.imageUri,
+  }));
+}
+
 export async function getCookbook() {
   if (_cache) return _cache;
 
@@ -32,9 +51,8 @@ export async function getCookbook() {
     try {
       const server = await api.getCookbook();
       if (server) {
-        _cache = server;
-        // Also cache locally
-        await AsyncStorage.setItem(KEY, JSON.stringify(server));
+        _cache = await resolveEntries(server);
+        await AsyncStorage.setItem(KEY, JSON.stringify(_cache));
         return _cache;
       }
     } catch {
@@ -81,12 +99,13 @@ export async function addCookbookEntry(entry) {
         notes: newEntry.notes,
       });
       if (server) {
-        // Use server response (has server-side imageUri)
+        // Resolve server image path to full URL
+        const resolved = (await resolveEntries([server]))[0];
         const list = await getCookbook();
-        list.unshift(server);
+        list.unshift(resolved);
         _cache = list;
         await AsyncStorage.setItem(KEY, JSON.stringify(list));
-        return server;
+        return resolved;
       }
     } catch {
       // Server offline — fall through to local
@@ -115,8 +134,9 @@ export async function updateCookbookEntry(id, updates) {
         date: updates.date,
       });
       if (server) {
+        const resolved = (await resolveEntries([server]))[0];
         const list = await getCookbook();
-        const next = list.map((e) => e.id === id ? { ...e, ...server } : e);
+        const next = list.map((e) => e.id === id ? { ...e, ...resolved } : e);
         _cache = next;
         await AsyncStorage.setItem(KEY, JSON.stringify(next));
         return next;
