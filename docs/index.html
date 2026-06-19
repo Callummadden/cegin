@@ -785,7 +785,6 @@ cp .env.example .env
 mkdir -p secrets && chmod 700 secrets
 echo "your-text-key" > secrets/TEXT_API_KEY
 echo "your-vision-key" > secrets/VISION_API_KEY
-echo "your-jwt-secret" > secrets/JWT_SECRET
 chmod 600 secrets/*
 docker compose up -d</div>
         </article>

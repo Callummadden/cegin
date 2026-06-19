@@ -1,9 +1,24 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { readSecret } = require('./secrets');
 
-const JWT_SECRET = readSecret('JWT_SECRET');
-if (!JWT_SECRET) throw new Error('JWT_SECRET is required. Set it in .env, secrets/ dir, or Docker secrets.');
+const JWT_SECRET = readSecret('JWT_SECRET') || (() => {
+  // Auto-generate and persist a JWT secret if none is set
+  const generated = crypto.randomBytes(32).toString('base64');
+  const secretDir = path.join(__dirname, 'secrets');
+  const secretPath = path.join(secretDir, 'JWT_SECRET');
+  try {
+    fs.mkdirSync(secretDir, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(secretPath, generated + '\n', { mode: 0o600 });
+    console.log('[auth] Auto-generated JWT_SECRET and saved to secrets/JWT_SECRET');
+  } catch (e) {
+    console.warn('[auth] Could not persist JWT_SECRET to file, using in-memory key:', e.message);
+  }
+  return generated;
+})();
 const JWT_EXPIRES = '30d';
 
 // ─── Token helpers ──────────────────────────────────────────────────────────
