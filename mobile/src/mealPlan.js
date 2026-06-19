@@ -46,11 +46,14 @@ async function save(plan) {
   _cache = plan;
   await AsyncStorage.setItem(KEY, JSON.stringify(plan));
   // Sync to server
-  if (await isServerMode()) {
+  const serverMode = await isServerMode();
+  console.log('[MealPlan] save() called, serverMode:', serverMode);
+  if (serverMode) {
     try {
-      await api.syncMealPlan(plan);
-    } catch {
-      // Server offline — plan is still saved locally
+      const result = await api.syncMealPlan(plan);
+      console.log('[MealPlan] Server sync success:', result);
+    } catch (e) {
+      console.error('[MealPlan] Server sync failed:', e.message);
     }
   }
 }
