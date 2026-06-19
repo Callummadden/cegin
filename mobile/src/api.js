@@ -486,6 +486,50 @@ export const api = {
     return request('/stats', { method: 'DELETE' });
   },
 
+  // Dietary profiles
+  getDietaryProfiles: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/dietary-profiles');
+  },
+  syncDietaryProfiles: async (profiles) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/dietary-profiles', { method: 'PUT', body: JSON.stringify({ profiles }) });
+  },
+  clearDietaryProfiles: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/dietary-profiles', { method: 'DELETE' });
+  },
+
+  // Cookbook entries (kitchen log with photos)
+  getCookbook: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/cookbook');
+  },
+  addCookbookEntry: async (entry) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/cookbook', { method: 'POST', body: JSON.stringify(entry) });
+  },
+  updateCookbookEntry: async (id, updates) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request(`/cookbook/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
+  },
+  deleteCookbookEntry: async (id) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request(`/cookbook/${id}`, { method: 'DELETE' });
+  },
+  clearCookbook: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/cookbook', { method: 'DELETE' });
+  },
+
   // Scanned items (from Terry Vision fridge scans)
   getScannedItems: async (all = false) => {
     const mode = await getAppMode();

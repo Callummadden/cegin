@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const { readSecret, readConfig } = require('./secrets');
 const {
   listRecipes,
@@ -736,6 +738,136 @@ app.post('/api/stats/record', (req, res) => {
 app.delete('/api/stats', (req, res) => {
   const userId = req.user?.id || 0;
   dbModule.clearStats(userId);
+  res.json({ ok: true });
+});
+
+// --- Dietary Profiles ---
+
+app.get('/api/dietary-profiles', (req, res) => {
+  const userId = req.user?.id || 0;
+  res.json(dbModule.getDietaryProfiles(userId));
+});
+
+app.put('/api/dietary-profiles', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { profiles } = req.body;
+  if (!Array.isArray(profiles)) return res.status(400).json({ error: 'profiles array required' });
+  res.json(dbModule.upsertDietaryProfiles(userId, profiles));
+});
+
+app.delete('/api/dietary-profiles', (req, res) => {
+  const userId = req.user?.id || 0;
+  dbModule.clearDietaryProfiles(userId);
+  res.json({ ok: true });
+});
+
+// --- Cookbook Entries (kitchen log with photos) ---
+
+const UPLOADS_DIR = path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : '/data', 'uploads', 'cookbook');
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Serve uploaded images
+app.use('/api/uploads/cookbook', express.static(UPLOADS_DIR));
+
+app.get('/api/cookbook', (req, res) => {
+  const userId = req.user?.id || 0;
+  const entries = dbModule.getCookbookEntries(userId);
+  // Map DB fields to client fields
+  res.json(entries.map(e => ({
+    id: e.id,
+    recipeId: e.recipe_id,
+    recipeTitle: e.recipe_title,
+    imageUri: e.image_path ? `/api/uploads/cookbook/${e.image_path}` : null,
+    date: e.date,
+    notes: e.notes,
+  })));
+});
+
+app.post('/api/cookbook', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { recipeId, recipeTitle, imageBase64, date, notes } = req.body;
+
+  let imagePath = '';
+  if (imageBase64) {
+    // Save image to disk
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const filepath = path.join(UPLOADS_DIR, filename);
+    const buffer = Buffer.from(imageBase64, 'base64');
+    fs.writeFileSync(filepath, buffer);
+    imagePath = filename;
+  }
+
+  const entry = dbModule.addCookbookEntry(userId, {
+    id: req.body.id,
+    recipeId,
+    recipeTitle,
+    imagePath,
+    date,
+    notes,
+  });
+
+  res.status(201).json({
+    id: entry.id,
+    recipeId: entry.recipe_id,
+    recipeTitle: entry.recipe_title,
+    imageUri: entry.image_path ? `/api/uploads/cookbook/${entry.image_path}` : null,
+    date: entry.date,
+    notes: entry.notes,
+  });
+});
+
+app.put('/api/cookbook/:id', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { id } = req.params;
+  const { recipeTitle, imageBase64, notes, date } = req.body;
+
+  let imagePath;
+  if (imageBase64) {
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const filepath = path.join(UPLOADS_DIR, filename);
+    const buffer = Buffer.from(imageBase64, 'base64');
+    fs.writeFileSync(filepath, buffer);
+    imagePath = filename;
+  }
+
+  const updated = dbModule.updateCookbookEntry(id, userId, {
+    recipeTitle,
+    imagePath,
+    notes,
+    date,
+  });
+  if (!updated) return res.status(404).json({ error: 'Entry not found' });
+
+  res.json({
+    id: updated.id,
+    recipeId: updated.recipe_id,
+    recipeTitle: updated.recipe_title,
+    imageUri: updated.image_path ? `/api/uploads/cookbook/${updated.image_path}` : null,
+    date: updated.date,
+    notes: updated.notes,
+  });
+});
+
+app.delete('/api/cookbook/:id', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { id } = req.params;
+  const deleted = dbModule.deleteCookbookEntry(id, userId);
+  if (!deleted) return res.status(404).json({ error: 'Entry not found' });
+  // Clean up image file
+  if (deleted.image_path) {
+    const filepath = path.join(UPLOADS_DIR, deleted.image_path);
+    fs.unlink(filepath, () => {});
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/cookbook', (req, res) => {
+  const userId = req.user?.id || 0;
+  const imagePaths = dbModule.clearCookbookEntries(userId);
+  // Clean up image files
+  for (const p of imagePaths) {
+    fs.unlink(path.join(UPLOADS_DIR, p), () => {});
+  }
   res.json({ ok: true });
 });
 

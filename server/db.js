@@ -697,6 +697,103 @@ function getTopRecipes(userId, limit = 5) {
     .slice(0, limit);
 }
 
+// ─── Dietary Profiles ────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS dietary_profiles (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    needs TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+function getDietaryProfiles(userId) {
+  const uid = userId || 0;
+  return db.prepare('SELECT * FROM dietary_profiles WHERE user_id = ? ORDER BY created_at DESC').all(uid);
+}
+
+function upsertDietaryProfiles(userId, profiles) {
+  const uid = userId || 0;
+  const txn = db.transaction(() => {
+    // Delete existing profiles for this user
+    db.prepare('DELETE FROM dietary_profiles WHERE user_id = ?').run(uid);
+    // Insert new ones
+    const insert = db.prepare('INSERT INTO dietary_profiles (id, user_id, name, needs, notes) VALUES (?, ?, ?, ?, ?)');
+    for (const p of profiles) {
+      insert.run(p.id || `p${Date.now().toString(36)}`, uid, p.name || '', p.needs || '', p.notes || '');
+    }
+  });
+  txn();
+  return getDietaryProfiles(uid);
+}
+
+function clearDietaryProfiles(userId) {
+  const uid = userId || 0;
+  db.prepare('DELETE FROM dietary_profiles WHERE user_id = ?').run(uid);
+}
+
+// ─── Cookbook Entries (kitchen log with photos) ──────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cookbook_entries (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    recipe_id INTEGER,
+    recipe_title TEXT DEFAULT '',
+    image_path TEXT DEFAULT '',
+    date TEXT DEFAULT (datetime('now')),
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+function getCookbookEntries(userId) {
+  const uid = userId || 0;
+  return db.prepare('SELECT * FROM cookbook_entries WHERE user_id = ? ORDER BY date DESC').all(uid);
+}
+
+function addCookbookEntry(userId, entry) {
+  const uid = userId || 0;
+  const id = entry.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  db.prepare('INSERT INTO cookbook_entries (id, user_id, recipe_id, recipe_title, image_path, date, notes) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+    id, uid, entry.recipeId || null, entry.recipeTitle || '', entry.imagePath || '', entry.date || new Date().toISOString(), entry.notes || ''
+  );
+  return db.prepare('SELECT * FROM cookbook_entries WHERE id = ?').get(id);
+}
+
+function updateCookbookEntry(id, userId, updates) {
+  const uid = userId || 0;
+  const existing = db.prepare('SELECT * FROM cookbook_entries WHERE id = ? AND user_id = ?').get(id, uid);
+  if (!existing) return null;
+  db.prepare('UPDATE cookbook_entries SET recipe_title = ?, image_path = ?, notes = ?, date = ? WHERE id = ?').run(
+    updates.recipeTitle ?? existing.recipe_title,
+    updates.imagePath ?? existing.image_path,
+    updates.notes ?? existing.notes,
+    updates.date ?? existing.date,
+    id
+  );
+  return db.prepare('SELECT * FROM cookbook_entries WHERE id = ?').get(id);
+}
+
+function deleteCookbookEntry(id, userId) {
+  const uid = userId || 0;
+  const entry = db.prepare('SELECT * FROM cookbook_entries WHERE id = ? AND user_id = ?').get(id, uid);
+  if (!entry) return null;
+  db.prepare('DELETE FROM cookbook_entries WHERE id = ?').run(id);
+  return entry;
+}
+
+function clearCookbookEntries(userId) {
+  const uid = userId || 0;
+  const entries = db.prepare("SELECT image_path FROM cookbook_entries WHERE user_id = ? AND image_path != ''").all(uid);
+  db.prepare('DELETE FROM cookbook_entries WHERE user_id = ?').run(uid);
+  return entries.map(e => e.image_path).filter(Boolean);
+}
+
 // Get all users who have notification subscriptions with push tokens
 function getSubscribedUsers() {
   return db.prepare(`
@@ -730,4 +827,8 @@ module.exports = {
   addScannedItem, getScannedItems, markItemConsumed, getExpiringItems, getExpiredItems,
   // Cook stats
   getStats, getCookDates, recordCook, getCookingStreak, clearStats, getTopRecipes,
+  // Dietary profiles
+  getDietaryProfiles, upsertDietaryProfiles, clearDietaryProfiles,
+  // Cookbook entries
+  getCookbookEntries, addCookbookEntry, updateCookbookEntry, deleteCookbookEntry, clearCookbookEntries,
 };

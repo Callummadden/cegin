@@ -1,16 +1,35 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from './api';
+import { getAppMode } from './config';
 
 const PROFILES_KEY = 'cegin_dietary_profiles';
 const ACTIVITY_KEY = 'cegin_activity_log';
 
 // --- Dietary Profiles ---
 // Shape: [{ id, name, needs, notes }]
-// Example: { id: 'p1', name: 'Sarah', needs: 'gluten-free, dairy-free', notes: 'IBS triggers: garlic, onion' }
 
 let _profilesCache = null;
 
+async function isServerMode() {
+  const mode = await getAppMode();
+  return mode === 'server';
+}
+
 export async function getDietaryProfiles() {
   if (_profilesCache) return _profilesCache;
+
+  if (await isServerMode()) {
+    try {
+      const server = await api.getDietaryProfiles();
+      if (server) {
+        _profilesCache = server.map(p => ({ id: p.id, name: p.name, needs: p.needs, notes: p.notes }));
+        return _profilesCache;
+      }
+    } catch {
+      // Server offline — fall through to local
+    }
+  }
+
   const raw = await AsyncStorage.getItem(PROFILES_KEY);
   try {
     _profilesCache = raw ? JSON.parse(raw) : [];
@@ -23,6 +42,14 @@ export async function getDietaryProfiles() {
 export async function saveDietaryProfiles(profiles) {
   _profilesCache = profiles;
   await AsyncStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+
+  if (await isServerMode()) {
+    try {
+      await api.syncDietaryProfiles(profiles);
+    } catch {
+      // Server offline — saved locally
+    }
+  }
 }
 
 export async function addDietaryProfile(profile) {
@@ -32,8 +59,7 @@ export async function addDietaryProfile(profile) {
     ...profile,
   };
   const updated = [...profiles, newProfile];
-  _profilesCache = updated;
-  await AsyncStorage.setItem(PROFILES_KEY, JSON.stringify(updated));
+  await saveDietaryProfiles(updated);
   return newProfile;
 }
 
@@ -56,11 +82,15 @@ export async function removeDietaryProfile(id) {
 export async function clearDietaryProfiles() {
   _profilesCache = null;
   await AsyncStorage.removeItem(PROFILES_KEY);
+
+  if (await isServerMode()) {
+    try {
+      await api.clearDietaryProfiles();
+    } catch {}
+  }
 }
 
 // --- Activity Context ---
-// Shape: { date, level, description, metrics }
-// Example: { date: '2026-06-13', level: 'high', description: '10k run + gym session', metrics: { steps: 15000, calories: 800 } }
 
 let _activityCache = null;
 
