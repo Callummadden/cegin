@@ -35,22 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const terryImg = document.getElementById('terry-avatar');
-  if (terryImg) {
-    const states = [
-      { src: 'assets/terry-idle.gif', alt: 'Chef Terry idle' },
-      { src: 'assets/terry-thinking.gif', alt: 'Chef Terry thinking' },
-      { src: 'assets/terry-talking.gif', alt: 'Chef Terry talking' },
-    ];
-    let idx = 0;
-
-    setInterval(() => {
-      idx = (idx + 1) % states.length;
-      terryImg.src = states[idx].src;
-      terryImg.alt = states[idx].alt;
-    }, 4000);
-  }
-
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
