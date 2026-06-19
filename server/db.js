@@ -394,8 +394,7 @@ db.exec(`
     morning_digest INTEGER DEFAULT 1,
     perishable_alerts INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    updated_at TEXT DEFAULT (datetime('now'))
   )
 `);
 
@@ -407,8 +406,7 @@ db.exec(`
     user_id INTEGER NOT NULL,
     token TEXT NOT NULL UNIQUE,
     device_name TEXT DEFAULT '',
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    created_at TEXT DEFAULT (datetime('now'))
   )
 `);
 
@@ -423,9 +421,7 @@ db.exec(`
     recipe_id INTEGER,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now')),
-    UNIQUE(user_id, date, meal),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE SET NULL
+    UNIQUE(user_id, date, meal)
   )
 `);
 
@@ -438,8 +434,7 @@ db.exec(`
     item_name TEXT NOT NULL,
     scanned_at TEXT DEFAULT (datetime('now')),
     expires_at TEXT,
-    consumed INTEGER DEFAULT 0,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    consumed INTEGER DEFAULT 0
   )
 `);
 
