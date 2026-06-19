@@ -778,16 +778,18 @@
         <article class="step-card">
           <div class="step-num">01</div>
           <h3>Start the server</h3>
-          <p>Copy <code>.env.example</code>, add API keys to <code>secrets/</code>, and launch Docker on your LAN machine.</p>
-          <div class="code-block">cd server
-cp .env.example .env
-docker compose up -d --build</div>
+          <p>Pull from Docker Hub, add your API keys, and launch on your LAN machine.</p>
+          <div class="code-block">docker pull callum2254/cegin:latest
+mkdir -p secrets && chmod 700 secrets
+echo "your-key" > secrets/TEXT_API_KEY
+echo "random-string" > secrets/JWT_SECRET
+docker compose up -d</div>
         </article>
         <article class="step-card">
           <div class="step-num">02</div>
           <h3>Install the app</h3>
           <p>Download the APK from GitHub Releases and install on your Android phone. Push notifications require the APK — not Expo Go.</p>
-          <a href="https://github.com/Callummadden/cegin/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Get APK v1.1.5</a>
+          <a href="https://github.com/Callummadden/cegin/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Get APK v1.1.6</a>
         </article>
         <article class="step-card">
           <div class="step-num">03</div>
@@ -1024,7 +1026,7 @@ docker compose up -d --build</div>
             and start cooking. Or skip the server entirely and run in local mode with your own API keys.
             Docker image available on Docker Hub.
           </p>
-          <div class="code-block">cd server && docker compose up -d --build</div>
+          <div class="code-block">docker pull callum2254/cegin:latest && docker compose up -d</div>
         </div>
         <div class="download-actions">
           <a href="https://github.com/Callummadden/cegin/releases" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
