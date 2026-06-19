@@ -3,6 +3,7 @@ recipes.db*
 *.log
 .env
 .env.*
+!.env.example
 dist/
 build/
 secrets/
