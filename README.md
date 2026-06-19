@@ -67,7 +67,7 @@ VISION_MODEL=gemini-2.5-flash
 ### Local Mode (zero server)
  * Everything stored in SQLite on your phone
  * AI calls go directly from the device using keys you paste in Settings
- * Keys stored in OS secure storage (Android Keystore / iOS Keychain)
+ * Keys stored in OS secure storage (Android Keystore)
  * Great for testing or when you don't want to run Docker
 > Switch modes anytime from Settings.
 > 
@@ -101,7 +101,7 @@ You're not locked into any provider. Change TEXT_BASE_URL and TEXT_MODEL in .env
  * Container runs as non-root user
  * Resource limits: 512MB RAM, 1 CPU
 ### Mobile (Local Mode)
- * API keys in expo-secure-store (Android Keystore / iOS Keychain)
+ * API keys in expo-secure-store (Android Keystore)
  * Hardware-backed AES-256 encryption at rest
  * In Expo Go, falls back to AsyncStorage (unencrypted)
 ## Backups & Data
