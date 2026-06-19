@@ -17,6 +17,12 @@ Released: TBD
 - Activity context now syncs to the Docker server
 - Version badge in Settings now reads from app.json dynamically
 
+### Saved Servers
+- Save multiple server URLs in Settings
+- Switch between servers with one tap (CONNECT button)
+- Active server is highlighted with primary color
+- Remove saved servers with ✕ button
+
 ### Data Management
 - Data section in Settings now shows device-only or device+server descriptions based on mode
 - "Delete All Data" clears server data too when in server mode
