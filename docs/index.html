@@ -779,7 +779,8 @@
           <div class="step-num">01</div>
           <h3>Start the server</h3>
           <p>Pull from Docker Hub, add your API keys, and launch on your LAN machine.</p>
-          <div class="code-block">docker pull callum2254/cegin:latest
+          <div class="code-block">git clone https://github.com/Callummadden/cegin.git
+cd cegin/server
 mkdir -p secrets && chmod 700 secrets
 echo "your-key" > secrets/TEXT_API_KEY
 echo "random-string" > secrets/JWT_SECRET
@@ -1026,7 +1027,7 @@ docker compose up -d</div>
             and start cooking. Or skip the server entirely and run in local mode with your own API keys.
             Docker image available on Docker Hub.
           </p>
-          <div class="code-block">docker pull callum2254/cegin:latest && docker compose up -d</div>
+          <div class="code-block">git clone https://github.com/Callummadden/cegin && cd cegin/server && docker compose up -d</div>
         </div>
         <div class="download-actions">
           <a href="https://github.com/Callummadden/cegin/releases" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
