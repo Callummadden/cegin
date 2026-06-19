@@ -68,7 +68,9 @@ export async function clearMealPlan() {
 }
 
 export async function setMeal(date, meal, recipeId) {
-  const plan = JSON.parse(JSON.stringify(await getMealPlan()));
+  const plan = {};
+  const cached = await getMealPlan();
+  for (const d in cached) plan[d] = { ...cached[d] };
   if (!plan[date]) plan[date] = {};
   plan[date][meal] = recipeId;
   await save(plan);
@@ -76,7 +78,9 @@ export async function setMeal(date, meal, recipeId) {
 }
 
 export async function clearMeal(date, meal) {
-  const plan = JSON.parse(JSON.stringify(await getMealPlan()));
+  const plan = {};
+  const cached = await getMealPlan();
+  for (const d in cached) plan[d] = { ...cached[d] };
   if (plan[date]) {
     delete plan[date][meal];
     if (!Object.keys(plan[date]).length) delete plan[date];
@@ -101,6 +105,10 @@ export function getWeekStart(offset = 0) {
   const monday = new Date(now.getFullYear(), now.getMonth(), diff);
   monday.setHours(0, 0, 0, 0);
   return monday;
+}
+
+export function clearCache() {
+  _cache = null;
 }
 
 export const MEALS = ['breakfast', 'lunch', 'snack', 'dinner', 'dessert'];

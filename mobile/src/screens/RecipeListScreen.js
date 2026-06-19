@@ -24,7 +24,7 @@ import * as Haptics from 'expo-haptics';
 import { api, getServerUrl } from '../api';
 import { getAppMode } from '../config';
 import { MONO, useTheme } from '../theme';
-import { isOnline as checkOnline, setOnline, getPendingChanges, syncPendingChanges } from '../offlineCache';
+import { isOnline as checkOnline, setOnline, getPendingChanges, syncPendingChanges, getCachedRecipesSync } from '../offlineCache';
 import { getFavorites, toggleFavorite } from '../favorites';
 import { getStats } from '../stats';
 import BottomNav from '../components/BottomNav';
@@ -33,6 +33,7 @@ import { RecipeCardSkeleton } from '../components/Skeleton';
 import { heroCardColors, hashStr } from '../utils/heroColors';
 import { useToast } from '../components/Toast';
 import TutorialOverlay, { shouldShowTutorial } from '../components/TutorialOverlay';
+import VersionBanner from '../components/VersionBanner';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const BASE_TABS = ['ALL', 'FAVES', 'QUICK'];
@@ -74,7 +75,7 @@ export default function RecipeListScreen({ navigation }) {
   const cardBgs = useMemo(() => heroCardColors(colors), [colors]);
   const insets = useSafeAreaInsets();
 
-  const [recipes, setRecipes] = useState([]);
+  const [recipes, setRecipes] = useState(() => getCachedRecipesSync());
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -139,6 +140,11 @@ export default function RecipeListScreen({ navigation }) {
     });
     return () => sub.remove();
   }, [load, search, showToast]);
+
+  // Free image memory when this screen unmounts (biggest memory consumer)
+  useEffect(() => {
+    return () => { Image.clearMemoryCache().catch(() => {}); };
+  }, []);
 
   // Load search history from AsyncStorage
   useEffect(() => {
@@ -280,16 +286,20 @@ export default function RecipeListScreen({ navigation }) {
       const isLocal = mode === 'local';
       setConfigured(isLocal || !!url);
       if (!isLocal && !url) { setLoading(false); return; }
-      const [data, favorites, cols, recipeCols] = await Promise.all([
+
+      // Show cached data instantly, update each as it arrives
+      const [data, favorites] = await Promise.all([
         api.listRecipes(query),
         getFavorites(),
-        api.listCollections().catch(() => []),
-        api.listRecipeCollections().catch(() => []),
       ]);
       setRecipes(data);
       setFavs(favorites);
-      setCollections(cols);
-      setRecipeCollections(recipeCols);
+      setLoading(false);
+
+      // Non-blocking: fetch collections in background
+      api.listCollections().then(setCollections).catch(() => {});
+      api.listRecipeCollections().then(setRecipeCollections).catch(() => {});
+
       // Track connectivity (only relevant in server mode)
       if (!isLocal) {
         // Check real connectivity after load — api.listRecipes may have returned cache
@@ -316,7 +326,6 @@ export default function RecipeListScreen({ navigation }) {
     } catch (e) {
       setError(e.message);
       setOffline(true);
-    } finally {
       setLoading(false);
     }
   }, []);
@@ -624,6 +633,9 @@ export default function RecipeListScreen({ navigation }) {
           </Text>
         </View>
       )}
+
+      {/* Version update banner */}
+      <VersionBanner />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: 18 + insets.top }]}>

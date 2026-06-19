@@ -133,3 +133,7 @@ export async function clearList() {
   await save([]);
   return [];
 }
+
+export function clearCache() {
+  _cache = null;
+}

@@ -20,7 +20,7 @@ let lastMorningDigest = null;    // 'YYYY-MM-DD'
 let lastPerishableCheck = null;  // 'YYYY-MM-DD-HH' (hour bucket)
 
 function getDateString() {
-  return new Date().toISOString().split('T')[0];
+  return dbModule.localDateStr();
 }
 
 /**

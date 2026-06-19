@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 const { readSecret, readConfig } = require('./secrets');
 const {
   listRecipes,
@@ -82,12 +83,16 @@ app.use('/api/ai', rateLimiter);
 
 // --- Body parsing (S2-11: path-aware to avoid stacking) ---
 const bodyParser1mb = express.json({ limit: '1mb' });
+const bodyParser5mb = express.json({ limit: '5mb' });
 const bodyParser20mb = express.json({ limit: '20mb' });
 
-// S2-11: Single body parser middleware — 20mb for scan-fridge, 1mb for everything else
+// S2-11: Single body parser middleware — 20mb for scan-fridge, 5mb for cookbook, 1mb for everything else
 app.use((req, res, next) => {
   if (req.path === '/api/ai/scan-fridge') {
     return bodyParser20mb(req, res, next);
+  }
+  if (req.path.startsWith('/api/cookbook')) {
+    return bodyParser5mb(req, res, next);
   }
   bodyParser1mb(req, res, next);
 });
@@ -109,7 +114,18 @@ app.use('/api', (req, res, next) => {
 // These are already excluded since they're not under /api
 
 // Health check — the app uses this to test the connection in Settings
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+// Also returns version info so the client can check if it's outdated
+const SERVER_VERSION = require('./package.json').version;
+const MIN_CLIENT_VERSION = '1.1.5';    // oldest client that works with this server
+const LATEST_CLIENT_VERSION = '1.1.5'; // newest published client
+const LATEST_SERVER_VERSION = '1.1.5'; // bump this when you release a new server
+app.get('/api/health', (req, res) => res.json({
+  ok: true,
+  serverVersion: SERVER_VERSION,
+  latestServerVersion: LATEST_SERVER_VERSION,
+  minClientVersion: MIN_CLIENT_VERSION,
+  latestClientVersion: LATEST_CLIENT_VERSION,
+}));
 
 // --- Auth ---
 
@@ -675,12 +691,17 @@ app.get('/api/meal-plan', (req, res) => {
 });
 
 app.post('/api/meal-plan/sync', (req, res) => {
-  const { plan } = req.body;
-  if (!plan || typeof plan !== 'object') {
-    return res.status(400).json({ error: 'plan object is required' });
+  try {
+    const { plan } = req.body;
+    if (!plan || typeof plan !== 'object') {
+      return res.status(400).json({ error: 'plan object is required' });
+    }
+    const synced = dbModule.syncMealPlan(req.user?.id || 0, plan);
+    res.json(synced);
+  } catch (e) {
+    console.error('[meal-plan/sync] Error:', e.message);
+    res.status(500).json({ error: e.message });
   }
-  const synced = dbModule.syncMealPlan(req.user?.id || 0, plan);
-  res.json(synced);
 });
 
 // --- Scanned Items ---
@@ -768,6 +789,47 @@ fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // Serve uploaded images
 app.use('/api/uploads/cookbook', express.static(UPLOADS_DIR));
+
+// --- Image proxy with on-the-fly resizing ---
+const IMAGE_CACHE_DIR = path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, 'data'), 'uploads', 'image-cache');
+fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
+
+app.get('/api/image-proxy', bodyParser5mb, async (req, res) => {
+  const { url, w } = req.query;
+  if (!url) return res.status(400).json({ error: 'url required' });
+  const width = Math.min(parseInt(w, 10) || 600, 1200);
+
+  // Cache key based on url + width
+  const crypto = require('crypto');
+  const cacheKey = crypto.createHash('md5').update(`${url}_${width}`).digest('hex') + '.jpg';
+  const cachePath = path.join(IMAGE_CACHE_DIR, cacheKey);
+
+  // Serve from cache if exists
+  if (fs.existsSync(cachePath)) {
+    return res.sendFile(cachePath);
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!resp.ok) return res.status(502).json({ error: 'fetch failed' });
+
+    const buffer = Buffer.from(await resp.arrayBuffer());
+    const resized = await sharp(buffer)
+      .resize(width, null, { withoutEnlargement: true, kernel: 'lanczos3' })
+      .jpeg({ quality: 90, progressive: true })
+      .toBuffer();
+
+    fs.writeFileSync(cachePath, resized);
+    res.set('Content-Type', 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=2592000'); // 30 days
+    res.send(resized);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
 
 app.get('/api/cookbook', (req, res) => {
   const userId = req.user?.id || 0;

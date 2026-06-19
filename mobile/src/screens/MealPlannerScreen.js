@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -59,6 +59,11 @@ export default function MealPlannerScreen({ navigation }) {
   const { showToast } = useToast();
   const swipeStartX = useRef(0);
   const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // Free image memory when screen unmounts
+  useEffect(() => {
+    return () => { Image.clearMemoryCache().catch(() => {}); };
+  }, []);
 
   const weekStart = getWeekStart(weekOffset);
   const days = Array.from({ length: 7 }, (_, i) => {

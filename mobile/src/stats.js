@@ -22,6 +22,31 @@ async function isServerMode() {
 export async function getStats() {
   if (_cache) return _cache;
 
+  // Try local cache first (instant)
+  try {
+    const raw = await AsyncStorage.getItem(STATS_KEY);
+    if (raw) {
+      _cache = { ...defaults, ...JSON.parse(raw) };
+      // Refresh from server in background (don't await)
+      if (await isServerMode()) {
+        api.getStats().then(server => {
+          if (server) {
+            _cache = {
+              cookCount: server.cookCount || 0,
+              totalSteps: server.totalSteps || 0,
+              recipeCookCounts: server.recipeCookCounts || {},
+              streak: server.streak || 0,
+              topRecipes: server.topRecipes || [],
+            };
+            AsyncStorage.setItem(STATS_KEY, JSON.stringify(_cache)).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+      return _cache;
+    }
+  } catch {}
+
+  // No local cache — must fetch from server
   if (await isServerMode()) {
     try {
       const server = await api.getStats();
@@ -33,19 +58,15 @@ export async function getStats() {
           streak: server.streak || 0,
           topRecipes: server.topRecipes || [],
         };
+        await AsyncStorage.setItem(STATS_KEY, JSON.stringify(_cache));
         return _cache;
       }
     } catch {
-      // Server offline — fall through to local
+      // Server offline — fall through to defaults
     }
   }
 
-  const raw = await AsyncStorage.getItem(STATS_KEY);
-  try {
-    _cache = raw ? { ...defaults, ...JSON.parse(raw) } : { ...defaults };
-  } catch {
-    _cache = { ...defaults };
-  }
+  _cache = { ...defaults };
   return _cache;
 }
 
@@ -167,4 +188,8 @@ export async function clearStats() {
   }
 
   await AsyncStorage.multiRemove([STATS_KEY, COOK_DATES_KEY]);
+}
+
+export function clearCache() {
+  _cache = null;
 }

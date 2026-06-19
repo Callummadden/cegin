@@ -126,12 +126,13 @@ export default function CookbookScreen({ navigation }) {
   const [streak, setStreak] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Clean up pending delete timeout on unmount
+  // Clean up pending delete timeout on unmount + free image memory
   useEffect(() => {
     return () => {
       if (pendingDeleteRef.current?.timeoutId) {
         clearTimeout(pendingDeleteRef.current.timeoutId);
       }
+      Image.clearMemoryCache().catch(() => {});
     };
   }, []);
 
@@ -180,18 +181,20 @@ export default function CookbookScreen({ navigation }) {
   }, [showToast]);
 
   const load = useCallback(async () => {
-    const [list, s, r, t, st] = await Promise.all([
+    // Show cached data instantly
+    const [cachedEntries, cachedStats] = await Promise.all([
       getCookbook(),
       getStats(),
-      api.listRecipes().catch(() => []),
-      getTopRecipes(3),
-      getCookingStreak(),
     ]);
-    setEntries(list);
-    setStats(s);
-    setRecipes(r);
-    setTopRecipes(t);
-    setStreak(st);
+    setEntries(cachedEntries);
+    setStats(cachedStats);
+    setTopRecipes(cachedStats.topRecipes || []);
+    setStreak(cachedStats.streak || 0);
+
+    // Fetch fresh data — update each as it arrives, don't block on the slowest
+    getCookbook().then(setEntries).catch(() => {});
+    getStats().then(s => { setStats(s); setTopRecipes(s.topRecipes || []); setStreak(s.streak || 0); }).catch(() => {});
+    api.listRecipes().then(setRecipes).catch(() => {});
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));

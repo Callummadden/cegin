@@ -148,3 +148,7 @@ export const ACTIVITY_LEVELS = [
   { value: 'high', label: 'HIGH', description: 'Intense workout, long training session' },
   { value: 'extreme', label: 'EXTREME', description: 'Competition, double session, manual labor' },
 ];
+
+export function clearCache() {
+  _profilesCache = null;
+}

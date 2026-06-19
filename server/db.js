@@ -510,9 +510,11 @@ function syncMealPlan(userId, plan) {
   const txn = db.transaction(() => {
     deleteOld.run(userId);
     for (const [date, meals] of Object.entries(plan || {})) {
+      if (!meals || typeof meals !== 'object') continue;
       for (const [meal, recipeId] of Object.entries(meals)) {
-        if (recipeId) {
-          upsert.run({ user_id: userId, date, meal, recipe_id: recipeId });
+        const id = parseInt(recipeId, 10);
+        if (id > 0) {
+          upsert.run({ user_id: userId, date, meal, recipe_id: id });
         }
       }
     }
@@ -531,8 +533,16 @@ function getMealPlan(userId) {
   return plan;
 }
 
+// Format date as YYYY-MM-DD in local time (matches client-side formatDate)
+function localDateStr(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getTodayMeals(userId) {
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const today = localDateStr();
   return db.prepare(`
     SELECT mp.*, r.title, r.prep_minutes, r.cook_minutes, r.ingredients
     FROM meal_plans mp
@@ -647,7 +657,7 @@ function recordCook(userId, recipeId, recipeTitle, stepCount) {
   });
 
   // Record cook date
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr();
   db.prepare('INSERT OR IGNORE INTO cook_dates (user_id, cook_date) VALUES (?, ?)').run(uid, today);
 
   return getStats(uid);
@@ -657,9 +667,8 @@ function getCookingStreak(userId) {
   const dates = getCookDates(userId);
   if (dates.length === 0) return 0;
 
-  const today = new Date().toISOString().split('T')[0];
-  const yDate = new Date(Date.now() - 86400000);
-  const yesterday = yDate.toISOString().split('T')[0];
+  const today = localDateStr();
+  const yesterday = localDateStr(new Date(Date.now() - 86400000));
 
   // Streak must include today or yesterday to be active
   if (dates[0] !== today && dates[0] !== yesterday) return 0;
@@ -991,4 +1000,6 @@ module.exports = {
   getChatHistory, syncChatHistory, clearChatHistory,
   // Activity context
   getActivityContext, syncActivityContext, clearActivityContext,
+  // Utils
+  localDateStr,
 };

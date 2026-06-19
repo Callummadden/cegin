@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
 import RecipeListScreen from './src/screens/RecipeListScreen';
 import RecipeDetailScreen from './src/screens/RecipeDetailScreen';
 import EditRecipeScreen from './src/screens/EditRecipeScreen';
@@ -47,6 +48,7 @@ function AppNavigator({ initialRoute }) {
         headerShown: false,
         animation: 'fade',
         cardStyle: { backgroundColor: colors.background },
+        unmountOnBlur: true,
       }}
         initialRouteName={initialRoute}
       >
@@ -70,6 +72,18 @@ function AppNavigator({ initialRoute }) {
 
 export default function App() {
   const [initialRoute, setInitialRoute] = useState(null);
+  const appState = useRef(AppState.currentState);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (appState.current.match(/active/) && next.match(/inactive|background/)) {
+        // Free image memory cache when app backgrounds
+        Image.clearMemoryCache().catch(() => {});
+      }
+      appState.current = next;
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem('setup_complete').then((val) => {

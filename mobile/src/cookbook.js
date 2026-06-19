@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { api } from './api';
 import { getAppMode, getServerUrl } from './config';
 
@@ -22,10 +23,16 @@ async function imageToBase64(uri) {
       console.log('[Cookbook] Image file does not exist:', uri);
       return null;
     }
-    const base64 = await FileSystem.readAsStringAsync(uri, {
+    // Resize to max 1000px wide and compress to keep payload small
+    const manipulated = await manipulateAsync(
+      uri,
+      [{ resize: { width: 1000 } }],
+      { compress: 0.7, format: SaveFormat.JPEG }
+    );
+    const base64 = await FileSystem.readAsStringAsync(manipulated.uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    console.log('[Cookbook] Image converted to base64, length:', base64.length);
+    console.log('[Cookbook] Compressed image base64 length:', base64.length);
     return base64;
   } catch (e) {
     console.error('[Cookbook] Failed to convert image to base64:', e.message);
@@ -186,4 +193,8 @@ export async function clearCookbook() {
 
   await save([]);
   return [];
+}
+
+export function clearCache() {
+  _cache = null;
 }

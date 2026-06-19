@@ -67,6 +67,29 @@ async function checkOnline() {
   if (!online) throw new Error('Offline — using cached data');
 }
 
+// Route external images through server proxy for resizing
+export async function proxyImageUrl(url, width = 600) {
+  if (!url) return null;
+  // Don't proxy local files, data URIs, or already-proxied URLs
+  if (url.startsWith('file://') || url.startsWith('data:') || url.includes('/api/image-proxy')) return url;
+  // Don't proxy local server uploads
+  if (url.includes('/api/uploads/')) return url;
+  const base = await getServerUrl();
+  if (!base) return url;
+  return `${base}/api/image-proxy?url=${encodeURIComponent(url)}&w=${width}`;
+}
+
+// Sync version for when server URL is already known
+let _cachedServerUrl = null;
+getServerUrl().then(u => { _cachedServerUrl = u; }).catch(() => {});
+export function proxyImageUrlSync(url, width = 600) {
+  if (!url) return null;
+  if (url.startsWith('file://') || url.startsWith('data:') || url.includes('/api/image-proxy')) return url;
+  if (url.includes('/api/uploads/')) return url;
+  if (!_cachedServerUrl) return url;
+  return `${_cachedServerUrl}/api/image-proxy?url=${encodeURIComponent(url)}&w=${width}`;
+}
+
 // ── Sync pending changes ─────────────────────────────────────────────────────
 
 export async function syncPendingChanges() {
@@ -164,7 +187,19 @@ export const api = {
     const mode = await getAppMode();
     if (mode === 'local') return localDb.listRecipes(search);
 
-    // Fast ping first (2s) — avoids 8s timeout on dead connections
+    // Try cached data first (instant)
+    try {
+      const cached = await getCachedRecipes();
+      if (cached.length > 0) {
+        // Refresh from server in background
+        checkOnline().then(() => request(`/recipes${search ? `?search=${encodeURIComponent(search)}` : ''}`))
+          .then(async data => { setOnline(true); await cacheRecipes(data); await mirrorRecipesToLocalDb(data); })
+          .catch(() => setOnline(false));
+        return cached;
+      }
+    } catch {}
+
+    // No cache — must fetch from server
     try {
       await checkOnline();
       const data = await request(`/recipes${search ? `?search=${encodeURIComponent(search)}` : ''}`);
@@ -175,12 +210,10 @@ export const api = {
       return data;
     } catch (e) {
       setOnline(false);
-      // Try AsyncStorage cache first (fast), then localDb
       const cached = await getCachedRecipes();
       if (cached.length > 0) return cached;
       const local = await localDb.listRecipes(search);
       if (local.length > 0) return local;
-      // No cached data anywhere — tell the user they need a connection
       throw new Error('No recipes available offline. Connect to load recipes.');
     }
   },

@@ -15,8 +15,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { getPermissionStatus, requestPermissionAndGetStatus, getPushToken } from '../notifications';
 import { api, getServerUrl, setServerUrl } from '../api';
 import { getAppMode, getDeepSeekKey, setDeepSeekKey, getGoogleKey, setGoogleKey, getCustomAIConfig, setCustomAIConfig, fetchAvailableModels } from '../config';
+import { clearCache as clearMealPlanCache } from '../mealPlan';
+import { clearCache as clearCookbookCache } from '../cookbook';
+import { clearCache as clearShoppingListCache } from '../shoppingList';
+import { clearCache as clearStatsCache } from '../stats';
+import { clearCache as clearDietProfilesCache } from '../dietProfiles';
 import { MONO, useTheme, THEME_LIST, OLED_ACCENTS } from '../theme';
 import Constants from 'expo-constants';
+import { checkVersions, getVersionStatus, CLIENT_VERSION } from '../versionCheck';
 
 // Preview swatch colors for each theme
 const THEME_PREVIEWS = {
@@ -159,6 +165,7 @@ export default function SettingsScreen({ navigation }) {
   const [status, setStatus] = useState(null);
   const [testing, setTesting] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
+  const [versionInfo, setVersionInfo] = useState(null);
   const [unitPref, setUnitPref] = useState('metric');
   const [devOpen, setDevOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
@@ -230,6 +237,7 @@ export default function SettingsScreen({ navigation }) {
       try { if (v) setSavedServers(JSON.parse(v)); } catch {}
     });
     api.aiStatus().then(setAiStatus).catch(() => {});
+    checkVersions().then(setVersionInfo).catch(() => {});
     AsyncStorage.getItem('unitPreference').then((v) => { if (v) setUnitPref(v); });
     getDietaryProfiles().then(setProfiles);
     getAppMode().then(setAppModeState);
@@ -310,6 +318,13 @@ export default function SettingsScreen({ navigation }) {
     setTesting(true);
     setStatus(null);
     try {
+      // Clear in-memory caches so the new server's data is fetched fresh
+      clearMealPlanCache();
+      clearCookbookCache();
+      clearShoppingListCache();
+      clearStatsCache();
+      clearDietProfilesCache();
+
       await setServerUrl(serverUrl);
       await api.health();
       const ai = await api.aiStatus().catch(() => null);
@@ -440,7 +455,12 @@ export default function SettingsScreen({ navigation }) {
                 </Text>
               </View>
               <Pressable onPress={handleVersionTap} style={[styles.versionBadge, { borderColor: colors.border }]}>
-                <Text style={[styles.versionText, { fontFamily: MONO, color: colors.primary }]}>v{Constants.expoConfig?.version || '1.1.2'}</Text>
+                <Text style={[styles.versionText, { fontFamily: MONO, color: colors.primary }]}>v{Constants.expoConfig?.version || '1.1.5'}</Text>
+                {versionInfo?.serverVersion && (
+                  <Text style={[styles.versionText, { fontFamily: MONO, color: versionInfo.serverOutdated ? '#FF9800' : '#4CAF50', fontSize: 9 }]}>
+                    Server: {versionInfo.serverOutdated ? 'Outdated' : 'Updated'}
+                  </Text>
+                )}
               </Pressable>
             </View>
             <View style={[styles.aboutMeta, { borderTopColor: colors.border }]}>

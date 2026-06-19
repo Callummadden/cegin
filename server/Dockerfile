@@ -11,7 +11,7 @@ WORKDIR /app
 # Install build deps, compile native modules, remove build deps — all in one
 # layer so the 300MB+ of python3/make/g++ doesn't stick around.
 COPY package*.json ./
-RUN apk add --no-cache python3 make g++ \
+RUN apk add --no-cache python3 make g++ tzdata \
     && npm ci --omit=dev \
     && apk del python3 make g++
 
@@ -21,6 +21,8 @@ COPY --chown=node:node . .
 
 # Database lives on a Docker volume so it survives container restarts/rebuilds.
 ENV DB_PATH=/data/recipes.db
+# Use UK timezone so date functions match client-side dates
+ENV TZ=Europe/London
 
 # Prepare the data directory with correct ownership for the non-root user.
 RUN mkdir -p /data && chown -R node:node /data

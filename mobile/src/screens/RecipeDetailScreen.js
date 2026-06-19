@@ -98,6 +98,11 @@ export default function RecipeDetailScreen({ route, navigation }) {
   const [notesDraft, setNotesDraft] = useState('');
   const intervalRef = useRef(null);
 
+  // Free image memory when screen unmounts
+  useEffect(() => {
+    return () => { Image.clearMemoryCache().catch(() => {}); };
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       api
