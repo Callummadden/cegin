@@ -10,7 +10,8 @@
       "backgroundColor": "#0E0E0E"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "kitchen.cegin.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +22,11 @@
       "versionCode": 8,
       "permissions": [
         "ACCESS_NETWORK_STATE",
-        "INTERNET"
+        "INTERNET",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "web": {
