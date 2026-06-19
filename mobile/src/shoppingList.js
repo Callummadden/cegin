@@ -1,12 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from './api';
+import { getAppMode } from './config';
 
 const KEY = 'cegin_shopping_list';
 
 // Each item: { id: string, text: string, checked: boolean, category?: string, source?: string }
 let _cache = null;
 
+async function isServerMode() {
+  const mode = await getAppMode();
+  return mode === 'server';
+}
+
 export async function getShoppingList() {
   if (_cache) return _cache;
+
+  if (await isServerMode()) {
+    try {
+      const server = await api.getShoppingList();
+      if (server) {
+        _cache = server;
+        await AsyncStorage.setItem(KEY, JSON.stringify(server));
+        return _cache;
+      }
+    } catch {
+      // Fall through to local
+    }
+  }
+
   try {
     const raw = await AsyncStorage.getItem(KEY);
     _cache = raw ? JSON.parse(raw) : [];
@@ -19,14 +40,19 @@ export async function getShoppingList() {
 async function save(list) {
   _cache = list;
   await AsyncStorage.setItem(KEY, JSON.stringify(list));
+
+  if (await isServerMode()) {
+    try {
+      await api.syncShoppingList(list);
+    } catch {
+      // Server offline — saved locally
+    }
+  }
 }
 
-// Check if a new item text matches any existing item (exact or contains)
 function isDuplicate(newText, existingTexts) {
   const lower = newText.toLowerCase();
-  // Exact match
   if (existingTexts.has(lower)) return true;
-  // Check if new text contains an existing item or vice versa
   for (const existing of existingTexts) {
     if (lower.includes(existing) || existing.includes(lower)) return true;
   }
@@ -41,7 +67,7 @@ export async function addItems(texts) {
     .filter(Boolean)
     .filter((t) => !isDuplicate(t, existing))
     .map((t) => {
-      existing.add(t.toLowerCase()); // prevent dupes within the batch
+      existing.add(t.toLowerCase());
       return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: t, checked: false };
     });
   if (newItems.length) {
@@ -50,8 +76,6 @@ export async function addItems(texts) {
   return _cache;
 }
 
-// Add items grouped by category with recipe sources.
-// categories: [{ name, items: [{ text, recipes }] }]
 export async function addItemsGrouped(categories) {
   const list = await getShoppingList();
   const existing = new Set(list.map((i) => i.text.toLowerCase()));
@@ -101,6 +125,11 @@ export async function removeChecked() {
 }
 
 export async function clearList() {
+  if (await isServerMode()) {
+    try {
+      await api.clearShoppingList();
+    } catch {}
+  }
   await save([]);
   return [];
 }

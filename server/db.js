@@ -794,6 +794,163 @@ function clearCookbookEntries(userId) {
   return entries.map(e => e.image_path).filter(Boolean);
 }
 
+// ─── Shopping List ───────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shopping_list (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    text TEXT NOT NULL DEFAULT '',
+    checked INTEGER DEFAULT 0,
+    category TEXT DEFAULT '',
+    source TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+function getShoppingList(userId) {
+  const uid = userId || 0;
+  return db.prepare('SELECT * FROM shopping_list WHERE user_id = ? ORDER BY created_at DESC').all(uid).map(r => ({
+    id: r.id, text: r.text, checked: !!r.checked, category: r.category, source: r.source,
+  }));
+}
+
+function syncShoppingList(userId, items) {
+  const uid = userId || 0;
+  const txn = db.transaction(() => {
+    db.prepare('DELETE FROM shopping_list WHERE user_id = ?').run(uid);
+    const insert = db.prepare('INSERT INTO shopping_list (id, user_id, text, checked, category, source) VALUES (?, ?, ?, ?, ?, ?)');
+    for (const item of items) {
+      insert.run(item.id, uid, item.text || '', item.checked ? 1 : 0, item.category || '', item.source || '');
+    }
+  });
+  txn();
+  return getShoppingList(uid);
+}
+
+function clearShoppingList(userId) {
+  const uid = userId || 0;
+  db.prepare('DELETE FROM shopping_list WHERE user_id = ?').run(uid);
+}
+
+// ─── Favorites ──────────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS favorites (
+    user_id INTEGER NOT NULL,
+    recipe_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, recipe_id)
+  )
+`);
+
+function getFavorites(userId) {
+  const uid = userId || 0;
+  const rows = db.prepare('SELECT recipe_id FROM favorites WHERE user_id = ?').all(uid);
+  const map = {};
+  for (const r of rows) map[r.recipe_id] = true;
+  return map;
+}
+
+function syncFavorites(userId, favs) {
+  const uid = userId || 0;
+  const txn = db.transaction(() => {
+    db.prepare('DELETE FROM favorites WHERE user_id = ?').run(uid);
+    const insert = db.prepare('INSERT INTO favorites (user_id, recipe_id) VALUES (?, ?)');
+    for (const [id, val] of Object.entries(favs)) {
+      if (val) insert.run(uid, Number(id));
+    }
+  });
+  txn();
+  return getFavorites(uid);
+}
+
+function clearFavorites(userId) {
+  const uid = userId || 0;
+  db.prepare('DELETE FROM favorites WHERE user_id = ?').run(uid);
+}
+
+// ─── Chat History ───────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_history (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    title TEXT DEFAULT '',
+    messages TEXT DEFAULT '[]',
+    timestamp INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+function getChatHistory(userId) {
+  const uid = userId || 0;
+  const rows = db.prepare('SELECT * FROM chat_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 50').all(uid);
+  return rows.map(r => {
+    let messages;
+    try { messages = JSON.parse(r.messages); } catch { messages = []; }
+    return { id: r.id, title: r.title, messages, timestamp: r.timestamp };
+  });
+}
+
+function syncChatHistory(userId, history) {
+  const uid = userId || 0;
+  const txn = db.transaction(() => {
+    db.prepare('DELETE FROM chat_history WHERE user_id = ?').run(uid);
+    const insert = db.prepare('INSERT INTO chat_history (id, user_id, title, messages, timestamp) VALUES (?, ?, ?, ?, ?)');
+    for (const conv of history) {
+      insert.run(conv.id, uid, conv.title || '', JSON.stringify(conv.messages || []), conv.timestamp || 0);
+    }
+  });
+  txn();
+  return getChatHistory(uid);
+}
+
+function clearChatHistory(userId) {
+  const uid = userId || 0;
+  db.prepare('DELETE FROM chat_history WHERE user_id = ?').run(uid);
+}
+
+// ─── Activity Context ──────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS activity_context (
+    user_id INTEGER PRIMARY KEY,
+    date TEXT,
+    level TEXT DEFAULT '',
+    description TEXT DEFAULT '',
+    metrics TEXT DEFAULT '{}',
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+function getActivityContext(userId) {
+  const uid = userId || 0;
+  const row = db.prepare('SELECT * FROM activity_context WHERE user_id = ?').get(uid);
+  if (!row) return null;
+  let metrics;
+  try { metrics = JSON.parse(row.metrics); } catch { metrics = {}; }
+  return { date: row.date, level: row.level, description: row.description, metrics };
+}
+
+function syncActivityContext(userId, context) {
+  const uid = userId || 0;
+  db.prepare(`
+    INSERT INTO activity_context (user_id, date, level, description, metrics, updated_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET
+      date = excluded.date, level = excluded.level,
+      description = excluded.description, metrics = excluded.metrics,
+      updated_at = datetime('now')
+  `).run(uid, context.date || '', context.level || '', context.description || '', JSON.stringify(context.metrics || {}));
+  return getActivityContext(uid);
+}
+
+function clearActivityContext(userId) {
+  const uid = userId || 0;
+  db.prepare('DELETE FROM activity_context WHERE user_id = ?').run(uid);
+}
+
 // Get all users who have notification subscriptions with push tokens
 function getSubscribedUsers() {
   return db.prepare(`
@@ -831,4 +988,12 @@ module.exports = {
   getDietaryProfiles, upsertDietaryProfiles, clearDietaryProfiles,
   // Cookbook entries
   getCookbookEntries, addCookbookEntry, updateCookbookEntry, deleteCookbookEntry, clearCookbookEntries,
+  // Shopping list
+  getShoppingList, syncShoppingList, clearShoppingList,
+  // Favorites
+  getFavorites, syncFavorites, clearFavorites,
+  // Chat history
+  getChatHistory, syncChatHistory, clearChatHistory,
+  // Activity context
+  getActivityContext, syncActivityContext, clearActivityContext,
 };

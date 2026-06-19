@@ -871,6 +871,86 @@ app.delete('/api/cookbook', (req, res) => {
   res.json({ ok: true });
 });
 
+// --- Shopping List ---
+
+app.get('/api/shopping-list', (req, res) => {
+  const userId = req.user?.id || 0;
+  res.json(dbModule.getShoppingList(userId));
+});
+
+app.put('/api/shopping-list', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { items } = req.body;
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items array required' });
+  res.json(dbModule.syncShoppingList(userId, items));
+});
+
+app.delete('/api/shopping-list', (req, res) => {
+  const userId = req.user?.id || 0;
+  dbModule.clearShoppingList(userId);
+  res.json({ ok: true });
+});
+
+// --- Favorites ---
+
+app.get('/api/favorites', (req, res) => {
+  const userId = req.user?.id || 0;
+  res.json(dbModule.getFavorites(userId));
+});
+
+app.put('/api/favorites', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { favorites } = req.body;
+  if (!favorites || typeof favorites !== 'object') return res.status(400).json({ error: 'favorites object required' });
+  res.json(dbModule.syncFavorites(userId, favorites));
+});
+
+app.delete('/api/favorites', (req, res) => {
+  const userId = req.user?.id || 0;
+  dbModule.clearFavorites(userId);
+  res.json({ ok: true });
+});
+
+// --- Chat History ---
+
+app.get('/api/chat-history', (req, res) => {
+  const userId = req.user?.id || 0;
+  res.json(dbModule.getChatHistory(userId));
+});
+
+app.put('/api/chat-history', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { history } = req.body;
+  if (!Array.isArray(history)) return res.status(400).json({ error: 'history array required' });
+  res.json(dbModule.syncChatHistory(userId, history));
+});
+
+app.delete('/api/chat-history', (req, res) => {
+  const userId = req.user?.id || 0;
+  dbModule.clearChatHistory(userId);
+  res.json({ ok: true });
+});
+
+// --- Activity Context ---
+
+app.get('/api/activity-context', (req, res) => {
+  const userId = req.user?.id || 0;
+  res.json(dbModule.getActivityContext(userId));
+});
+
+app.put('/api/activity-context', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { context } = req.body;
+  if (!context) return res.status(400).json({ error: 'context required' });
+  res.json(dbModule.syncActivityContext(userId, context));
+});
+
+app.delete('/api/activity-context', (req, res) => {
+  const userId = req.user?.id || 0;
+  dbModule.clearActivityContext(userId);
+  res.json({ ok: true });
+});
+
 // S2-10: Express error handler middleware (must be last)
 app.use((err, req, res, next) => {
   console.error(err);

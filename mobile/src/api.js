@@ -530,6 +530,74 @@ export const api = {
     return request('/cookbook', { method: 'DELETE' });
   },
 
+  // Shopping list
+  getShoppingList: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/shopping-list');
+  },
+  syncShoppingList: async (items) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/shopping-list', { method: 'PUT', body: JSON.stringify({ items }) });
+  },
+  clearShoppingList: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/shopping-list', { method: 'DELETE' });
+  },
+
+  // Favorites
+  getFavorites: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/favorites');
+  },
+  syncFavorites: async (favorites) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/favorites', { method: 'PUT', body: JSON.stringify({ favorites }) });
+  },
+  clearFavorites: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/favorites', { method: 'DELETE' });
+  },
+
+  // Chat history
+  getChatHistory: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/chat-history');
+  },
+  syncChatHistory: async (history) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/chat-history', { method: 'PUT', body: JSON.stringify({ history }) });
+  },
+  clearChatHistory: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/chat-history', { method: 'DELETE' });
+  },
+
+  // Activity context
+  getActivityContext: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/activity-context');
+  },
+  syncActivityContext: async (context) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/activity-context', { method: 'PUT', body: JSON.stringify({ context }) });
+  },
+  clearActivityContext: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/activity-context', { method: 'DELETE' });
+  },
+
   // Scanned items (from Terry Vision fridge scans)
   getScannedItems: async (all = false) => {
     const mode = await getAppMode();

@@ -96,6 +96,20 @@ let _activityCache = null;
 
 export async function getActivityContext() {
   if (_activityCache) return _activityCache;
+
+  if (await isServerMode()) {
+    try {
+      const server = await api.getActivityContext();
+      if (server) {
+        _activityCache = server;
+        await AsyncStorage.setItem(ACTIVITY_KEY, JSON.stringify(server));
+        return _activityCache;
+      }
+    } catch {
+      // Fall through to local
+    }
+  }
+
   const raw = await AsyncStorage.getItem(ACTIVITY_KEY);
   try { _activityCache = raw ? JSON.parse(raw) : null; } catch { _activityCache = null; }
   return _activityCache;
@@ -104,12 +118,27 @@ export async function getActivityContext() {
 export async function setActivityContext(context) {
   _activityCache = { ...context, date: context.date || new Date().toISOString().slice(0, 10) };
   await AsyncStorage.setItem(ACTIVITY_KEY, JSON.stringify(_activityCache));
+
+  if (await isServerMode()) {
+    try {
+      await api.syncActivityContext(_activityCache);
+    } catch {
+      // Server offline — saved locally
+    }
+  }
+
   return _activityCache;
 }
 
 export async function clearActivityContext() {
   _activityCache = null;
   await AsyncStorage.removeItem(ACTIVITY_KEY);
+
+  if (await isServerMode()) {
+    try {
+      await api.clearActivityContext();
+    } catch {}
+  }
 }
 
 export const ACTIVITY_LEVELS = [

@@ -1,11 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from './api';
+import { getAppMode } from './config';
 
 const HISTORY_KEY = 'cegin_chat_history';
 const MAX_HISTORY = 50;
 
 // Each conversation: { id, title, messages, timestamp }
 
+async function isServerMode() {
+  const mode = await getAppMode();
+  return mode === 'server';
+}
+
 export async function getChatHistory() {
+  if (await isServerMode()) {
+    try {
+      const server = await api.getChatHistory();
+      if (server) {
+        await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(server));
+        return server;
+      }
+    } catch {
+      // Fall through to local
+    }
+  }
+
   try {
     const raw = await AsyncStorage.getItem(HISTORY_KEY);
     return raw ? JSON.parse(raw) : [];
@@ -16,6 +35,14 @@ export async function getChatHistory() {
 
 async function save(history) {
   await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+
+  if (await isServerMode()) {
+    try {
+      await api.syncChatHistory(history);
+    } catch {
+      // Server offline — saved locally
+    }
+  }
 }
 
 // Save or update a conversation. If conversationId is provided, update it.
@@ -25,7 +52,6 @@ export async function saveConversation(messages, conversationId = null) {
   const title = messages.find((m) => m.role === 'user')?.content?.slice(0, 60) || 'Untitled chat';
 
   if (conversationId) {
-    // Update existing conversation
     const idx = history.findIndex((c) => c.id === conversationId);
     if (idx !== -1) {
       history[idx] = { ...history[idx], title, messages, timestamp: Date.now() };
@@ -34,7 +60,6 @@ export async function saveConversation(messages, conversationId = null) {
     }
   }
 
-  // Create new conversation
   const entry = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     title,
@@ -55,10 +80,14 @@ export async function deleteConversation(id) {
 }
 
 export async function clearHistory() {
+  if (await isServerMode()) {
+    try {
+      await api.clearChatHistory();
+    } catch {}
+  }
   await save([]);
 }
 
-// Format a relative time label
 export function formatRelativeTime(timestamp) {
   const now = Date.now();
   const diff = now - timestamp;
