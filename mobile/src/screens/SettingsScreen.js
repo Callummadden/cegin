@@ -155,6 +155,7 @@ export default function SettingsScreen({ navigation }) {
   const { noAI, setNoAI } = useAi();
   const insets = useSafeAreaInsets();
   const [url, setUrl] = useState('');
+  const [savedServers, setSavedServers] = useState([]);
   const [status, setStatus] = useState(null);
   const [testing, setTesting] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
@@ -225,6 +226,9 @@ export default function SettingsScreen({ navigation }) {
 
   useEffect(() => {
     getServerUrl().then(setUrl);
+    AsyncStorage.getItem('saved_servers').then((v) => {
+      try { if (v) setSavedServers(JSON.parse(v)); } catch {}
+    });
     api.aiStatus().then(setAiStatus).catch(() => {});
     AsyncStorage.getItem('unitPreference').then((v) => { if (v) setUnitPref(v); });
     getDietaryProfiles().then(setProfiles);
@@ -280,6 +284,48 @@ export default function SettingsScreen({ navigation }) {
     } finally {
       setTesting(false);
     }
+  };
+
+  const saveCurrentServer = async () => {
+    const trimmed = url.trim().replace(/\/+$/, '');
+    if (!trimmed) return;
+    // Don't add duplicates
+    if (savedServers.some((s) => s.url === trimmed)) {
+      showModal('Already Saved', 'This server is already in your list.', [{ text: 'OK', primary: true }]);
+      return;
+    }
+    // Try to get a label from the server
+    let label = trimmed;
+    try {
+      const res = await fetch(`${trimmed}/api/health`, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) label = trimmed;
+    } catch {}
+    const updated = [...savedServers, { url: trimmed, label, addedAt: Date.now() }];
+    setSavedServers(updated);
+    await AsyncStorage.setItem('saved_servers', JSON.stringify(updated));
+  };
+
+  const connectToServer = async (serverUrl) => {
+    setUrl(serverUrl);
+    setTesting(true);
+    setStatus(null);
+    try {
+      await setServerUrl(serverUrl);
+      await api.health();
+      const ai = await api.aiStatus().catch(() => null);
+      setAiStatus(ai);
+      setStatus({ ok: true, message: '● CONNECTED' });
+    } catch (e) {
+      setStatus({ ok: false, message: `Saved, but could not connect: ${e.message}` });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const removeSavedServer = async (serverUrl) => {
+    const updated = savedServers.filter((s) => s.url !== serverUrl);
+    setSavedServers(updated);
+    await AsyncStorage.setItem('saved_servers', JSON.stringify(updated));
   };
 
   const saveUnitPref = async (val) => {
@@ -952,6 +998,60 @@ export default function SettingsScreen({ navigation }) {
                     {status.message}
                   </Text>
                 )}
+                <Pressable
+                  style={[styles.testBtn, { borderColor: colors.border, borderWidth: 1.5, backgroundColor: 'transparent', marginTop: 8 }]}
+                  onPress={saveCurrentServer}
+                >
+                  <Text style={[styles.testBtnText, { fontFamily: MONO, color: colors.text }]}>SAVE THIS SERVER</Text>
+                </Pressable>
+
+                {/* Saved Servers */}
+                {savedServers.length > 0 && (
+                  <View style={{ marginTop: 16 }}>
+                    <Text style={[styles.subLabel, { color: colors.text2, marginBottom: 8 }]}>SAVED SERVERS</Text>
+                    {savedServers.map((server) => {
+                      const isActive = url === server.url;
+                      return (
+                        <View
+                          key={server.url}
+                          style={[styles.infoCard, {
+                            backgroundColor: isActive ? (colors.primary + '15') : colors.surface,
+                            borderColor: isActive ? colors.primary : colors.border,
+                            marginBottom: 8,
+                          }]}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                              <Text style={[styles.infoValue, { fontFamily: MONO, fontSize: 12, color: isActive ? colors.primary : colors.text }]} numberOfLines={1}>
+                                {server.url}
+                              </Text>
+                              {isActive && (
+                                <Text style={[styles.statusText, { fontFamily: MONO, color: colors.primary, marginTop: 2 }]}>● ACTIVE</Text>
+                              )}
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                              {!isActive && (
+                                <Pressable
+                                  style={[styles.testBtn, { backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 6, marginTop: 0 }]}
+                                  onPress={() => connectToServer(server.url)}
+                                >
+                                  <Text style={[styles.testBtnText, { fontFamily: MONO, color: colors.onPrimary, fontSize: 11 }]}>CONNECT</Text>
+                                </Pressable>
+                              )}
+                              <Pressable
+                                style={[styles.testBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 6, marginTop: 0 }]}
+                                onPress={() => removeSavedServer(server.url)}
+                              >
+                                <Text style={[styles.testBtnText, { fontFamily: MONO, color: colors.textMuted, fontSize: 11 }]}>✕</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
                 <Pressable
                   style={[styles.testBtn, { borderColor: colors.border, borderWidth: 1.5, backgroundColor: 'transparent', marginTop: 8 }]}
                   onPress={() => navigation.navigate('Setup', { switching: true })}
