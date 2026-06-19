@@ -796,7 +796,11 @@ export default function SettingsScreen({ navigation }) {
             <View style={styles.collapseRow}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.collapseTitle, { color: colors.text }]}>Manage stored data</Text>
-                <Text style={[styles.collapseHint, { color: colors.textMuted }]}>Clear shopping list, chat history, meal plans, and more</Text>
+                <Text style={[styles.collapseHint, { color: colors.textMuted }]}>
+                  {appMode === 'server'
+                    ? 'Clear data from this device and the server'
+                    : 'Clear local data from this device'}
+                </Text>
               </View>
               <Text style={[styles.collapseArrow, { color: colors.textMuted }]}>{dataOpen ? '▲' : '▼'}</Text>
             </View>
@@ -841,14 +845,18 @@ export default function SettingsScreen({ navigation }) {
               </Pressable>
               <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
                 <Text style={[styles.collapseHint, { color: colors.textMuted, marginBottom: 12, paddingHorizontal: 4 }]}>
-                  Permanently remove all recipes, meal plans, chat history, shopping lists, dietary profiles, cooking stats, and settings from this device.
+                  {appMode === 'server'
+                    ? 'Permanently remove all recipes, meal plans, chat history, shopping lists, dietary profiles, cooking stats, and settings from this device and the server.'
+                    : 'Permanently remove all recipes, meal plans, chat history, shopping lists, dietary profiles, cooking stats, and settings from this device.'}
                 </Text>
                 <Pressable
                   style={[styles.dataRow, { borderBottomWidth: 0 }]}
                   onPress={() => {
                     showModal(
                       'Delete All Data?',
-                      'This will permanently remove all your recipes, meal plans, chat history, shopping lists, dietary profiles, cooking stats, and settings from this device. This cannot be undone.',
+                      appMode === 'server'
+                        ? 'This will permanently remove all your data from this device AND the server. This cannot be undone.'
+                        : 'This will permanently remove all your data from this device. This cannot be undone.',
                       [
                         { text: 'Cancel', onPress: () => {} },
                         {
@@ -857,7 +865,7 @@ export default function SettingsScreen({ navigation }) {
                           onPress: async () => {
                             try {
                               await resetApp();
-                              showModal('Done', 'All data has been deleted from this device.', [{ text: 'OK', primary: true }]);
+                              showModal('Done', appMode === 'server' ? 'All data has been deleted from this device and the server.' : 'All data has been deleted from this device.', [{ text: 'OK', primary: true }]);
                             } catch (e) {
                               showModal('Error', String(e?.message || e), [{ text: 'OK', primary: true }]);
                             }
@@ -1118,7 +1126,9 @@ export default function SettingsScreen({ navigation }) {
                   onPress={() => {
                     showModal(
                       'Reset Entire App?',
-                      'This wipes everything — setup, server URL, themes, data, local DB. The app will restart fresh.',
+                      appMode === 'server'
+                        ? 'This wipes everything — setup, server URL, themes, data, local DB, and all server data. The app will restart fresh.'
+                        : 'This wipes everything — setup, server URL, themes, data, local DB. The app will restart fresh.',
                       [
                         { text: 'CANCEL' },
                         {

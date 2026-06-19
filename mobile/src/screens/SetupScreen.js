@@ -160,6 +160,22 @@ export default function SetupScreen({ route, navigation }) {
       const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       await AsyncStorage.setItem('app_mode', 'server');
+
+      // Check if server already has data — skip setup if so
+      try {
+        const recipesRes = await fetch(`${url}/api/recipes`, { signal: AbortSignal.timeout(5000) });
+        if (recipesRes.ok) {
+          const recipes = await recipesRes.json();
+          if (Array.isArray(recipes) && recipes.length > 0) {
+            // Server has existing data — skip setup, go straight to app
+            finish();
+            return;
+          }
+        }
+      } catch {
+        // Can't check recipes — continue with setup
+      }
+
       goNext('diet');
     } catch (e) {
       setError(`Could not connect: ${e.message}`);

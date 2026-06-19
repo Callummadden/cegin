@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { clearAllSecureKeys } from './config';
+import { api } from './api';
+import { getAppMode } from './config';
 
 // Static imports only — Metro requires this for bundling
 import { clearList } from './shoppingList';
@@ -9,20 +11,23 @@ import { clearMealPlan } from './mealPlan';
 import { clearStats } from './stats';
 import { clearCookbook } from './cookbook';
 import { clearDietaryProfiles } from './dietProfiles';
+import { clearFavorites } from './favorites';
+import { clearActivityContext } from './dietProfiles';
 
 const LOCAL_DB_NAME = 'cegin.db';
 
 /**
- * Full reset for development / testing the startup flow (especially the new
- * custom text + vision model configuration on first launch).
- *
- * This function only uses static imports so Metro can bundle it correctly.
+ * Full reset — clears all local data and server data (if in server mode).
  */
 export async function resetApp() {
   console.log('[ResetApp] Starting full app reset...');
 
+  // Check if we're in server mode
+  const mode = await getAppMode();
+  const isServer = mode === 'server';
+
   try {
-    // Clear all the feature-specific stores
+    // Clear all the feature-specific stores (each handles server sync)
     await Promise.allSettled([
       clearList(),
       clearHistory(),
@@ -30,7 +35,24 @@ export async function resetApp() {
       clearStats(),
       clearCookbook(),
       clearDietaryProfiles(),
+      clearFavorites(),
+      clearActivityContext(),
     ]);
+
+    // If in server mode, also explicitly clear server-side data
+    // (in case individual clears failed or were skipped)
+    if (isServer) {
+      console.log('[ResetApp] Clearing server data...');
+      await Promise.allSettled([
+        api.clearShoppingList(),
+        api.clearChatHistory(),
+        api.clearStats(),
+        api.clearCookbook(),
+        api.clearDietaryProfiles(),
+        api.clearFavorites(),
+        api.clearActivityContext(),
+      ]);
+    }
 
     // Delete the local SQLite database used in "local" mode
     const dbPath = `${FileSystem.documentDirectory}SQLite/${LOCAL_DB_NAME}`;
@@ -52,15 +74,13 @@ export async function resetApp() {
     console.log('[ResetApp] Cleared all SecureStore keys');
 
     // Nuclear option: clear every key in AsyncStorage
-    // This removes setup_complete, app_mode, serverUrl, custom AI config,
-    // themes, auth tokens, and everything else.
     await AsyncStorage.clear();
     console.log('[ResetApp] Cleared ALL AsyncStorage keys');
 
     console.log('[ResetApp] ✅ Full reset complete.');
     console.log(
       '[ResetApp] Please fully close the app and reopen it (or shake device → Reload) ' +
-        'to see the fresh startup screen with the text + vision model picker.'
+        'to see the fresh startup screen.'
     );
 
     return true;
