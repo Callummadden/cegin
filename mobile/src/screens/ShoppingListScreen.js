@@ -944,7 +944,7 @@ const makeStyles = (colors) => StyleSheet.create({
   pickTitle: { fontSize: 15, fontWeight: '600', flex: 1 },
   generateBtn: {
     marginHorizontal: 20,
-    marginBottom: 8,
+    marginBottom: 70,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
