@@ -9,7 +9,7 @@ A personal recipe app with an AI cooking assistant named Chef Terry.
 * **Push notifications** — proactive morning meal prep reminders and perishable ingredient alerts
 * **Works offline** — Run everything on your phone (local mode) or against a self-hosted server
 ### Built with:
-* **Server:** Node.js + Express + SQLite (Dockerized, ~376MB image)
+* **Server:** Node.js + Express + SQLite (Dockerized, ~100MB download)
 * **Mobile:** Expo SDK 56 (React Native)
 ---
 ## Quick Start
