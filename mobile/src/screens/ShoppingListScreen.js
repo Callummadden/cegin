@@ -125,6 +125,7 @@ export default function ShoppingListScreen({ navigation }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [modal, setModal] = useState(null);
   const [quickItem, setQuickItem] = useState(null);
+  const [quickItemCategory, setQuickItemCategory] = useState(null);
   const [quickQty, setQuickQty] = useState('');
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [quickCustom, setQuickCustom] = useState('');
@@ -677,7 +678,7 @@ export default function ShoppingListScreen({ navigation }) {
                             styles.quickMenuChip,
                             { borderColor: item.isBuiltIn ? colors.border : colors.primary, backgroundColor: item.isBuiltIn ? colors.background : 'rgba(255,90,38,0.08)' },
                           ]}
-                          onPress={() => { setQuickMenuOpen(false); setQuickItem(item.name); setQuickQty(''); }}
+                          onPress={() => { setQuickMenuOpen(false); setQuickItem(item.name); setQuickItemCategory(item.category || cat.label); setQuickQty(''); }}
                           onLongPress={() => startEditItem(item)}
                           delayLongPress={400}
                         >
@@ -800,7 +801,7 @@ export default function ShoppingListScreen({ navigation }) {
                 style={[styles.quickBtn, { backgroundColor: colors.primary }]}
                 onPress={async () => {
                   const text = quickQty.trim() ? `${quickQty.trim()} ${quickItem}` : quickItem;
-                  await addItems([text]);
+                  await addItemsGrouped([{ name: quickItemCategory || 'Other', items: [{ text }] }]);
                   setItems(await getShoppingList());
                   setQuickItem(null);
                 }}
