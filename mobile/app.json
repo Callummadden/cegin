@@ -42,7 +42,8 @@
       "expo-image",
       "expo-web-browser",
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withCleartextTraffic.js"
     ]
   }
 }
