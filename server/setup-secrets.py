@@ -8,7 +8,7 @@ secrets_dir.mkdir(mode=0o700, exist_ok=True)
 
 # Map env var names to secret file names
 SECRET_KEYS = ['TEXT_API_KEY', 'VISION_API_KEY', 'JWT_SECRET',
-               'DEEPSEEK_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_CLIENT_SECRET']
+               'DEEPSEEK_API_KEY', 'GOOGLE_API_KEY']
 
 # Parse .env
 env = {}

@@ -1173,6 +1173,88 @@ async function scanFridge(imageBase64) {
   return callVisionModel(imageBase64);
 }
 
+// ─── Scan recipe image with vision ────────────────────────────────────────
+
+async function scanRecipeImage(imageBase64) {
+  if (!VISION_API_KEY) {
+    const err = new Error('No vision API key configured. Set VISION_API_KEY (or GOOGLE_API_KEY).');
+    err.status = 503;
+    throw err;
+  }
+
+  const prompt =
+    'You are looking at a photo of a recipe (from a cookbook, printed page, or screen). ' +
+    'Extract the recipe information and return it as JSON with these fields: ' +
+    'title (string), description (string, 1-2 sentences), ' +
+    'ingredients (array of strings, one per line with quantity), ' +
+    'steps (array of strings, one instruction per step in order), ' +
+    'tags (array of short lowercase tags - cuisine, course, key ingredient), ' +
+    'prep_minutes (number), cook_minutes (number), servings (number). ' +
+    'If you cannot determine a numeric field, use 0 for minutes and 1 for servings. ' +
+    'Be thorough with ingredients and steps. Do not invent content that isn\'t visible.';
+
+  let rawText;
+  if (VISION_PROVIDER === 'openai-compatible' || VISION_PROVIDER === 'openai') {
+    const base = (readConfig('VISION_BASE_URL') || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const url = `${base}/chat/completions`;
+    const messages = [{
+      role: 'user',
+      content: [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+      ],
+    }];
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${VISION_API_KEY}` },
+      body: JSON.stringify({ model: VISION_MODEL, messages, temperature: 0.2, max_tokens: 1500 }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!res.ok) {
+      let detail = ''; try { const b = await res.json(); detail = b.error?.message || JSON.stringify(b); } catch { detail = await res.text().catch(() => ''); }
+      const err = new Error(`Vision request failed (${res.status})${detail ? `: ${detail}` : ''}`); err.status = 502; throw err;
+    }
+    const data = await res.json();
+    rawText = data.choices?.[0]?.message?.content || '{}';
+  } else {
+    // Gemini
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${VISION_MODEL}:generateContent?key=${VISION_API_KEY}`;
+    const body = {
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } }
+        ]
+      }],
+      generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
+    };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!res.ok) {
+      let detail = '';
+      try { const errBody = await res.json(); detail = errBody.error?.message || JSON.stringify(errBody); } catch { detail = await res.text().catch(() => ''); }
+      const err = new Error(`Gemini vision failed (${res.status})${detail ? `: ${detail}` : ''}`);
+      err.status = 502;
+      throw err;
+    }
+    const data = await res.json();
+    rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    const m = rawText.match(/\{[\s\S]*\}/);
+    parsed = m ? JSON.parse(m[0]) : {};
+  }
+  return normalizeRecipe(parsed);
+}
+
 module.exports = {
   isConfigured,
   chat,
@@ -1188,6 +1270,7 @@ module.exports = {
   estimateNutrition,
   generatePrepSteps,
   scanFridge,
+  scanRecipeImage,
   setTextModel,
   setVisionModel,
   getTextModel,

@@ -401,6 +401,10 @@ export const api = {
     return request('/ai/scan-fridge', { method: 'POST', body: JSON.stringify({ image: imageBase64 }) });
   },
 
+  scanRecipe: async (imageBase64) => {
+    return request('/ai/scan-recipe', { method: 'POST', body: JSON.stringify({ image: imageBase64 }) });
+  },
+
   // Dietary audit
   auditRecipe: async ({ recipe, dietaryProfiles }) => {
     if ((await getAppMode()) === 'local' || (await hasCustomAI())) return localAi.auditRecipe(recipe, dietaryProfiles);

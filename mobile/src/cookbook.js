@@ -119,13 +119,10 @@ export async function addCookbookEntry(entry) {
       });
       console.log('[Cookbook] Server response:', server);
       if (server) {
-        // Resolve server image path to full URL
-        const resolved = (await resolveEntries([server]))[0];
-        const list = await getCookbook();
-        list.unshift(resolved);
-        _cache = list;
-        await AsyncStorage.setItem(KEY, JSON.stringify(list));
-        return resolved;
+        // Don't add to local cache here — the WebSocket broadcast will trigger
+        // getCookbook() which fetches from server and replaces the cache.
+        // Adding here causes duplicates when the WebSocket event fires.
+        return (await resolveEntries([server]))[0];
       }
     } catch {
       // Server offline — fall through to local
@@ -154,12 +151,8 @@ export async function updateCookbookEntry(id, updates) {
         date: updates.date,
       });
       if (server) {
-        const resolved = (await resolveEntries([server]))[0];
-        const list = await getCookbook();
-        const next = list.map((e) => e.id === id ? { ...e, ...resolved } : e);
-        _cache = next;
-        await AsyncStorage.setItem(KEY, JSON.stringify(next));
-        return next;
+        // WebSocket broadcast will trigger getCookbook() to refresh the cache
+        return (await resolveEntries([server]))[0];
       }
     } catch {
       // Fall through to local
@@ -176,6 +169,8 @@ export async function deleteCookbookEntry(id) {
   if (await isServerMode()) {
     try {
       await api.deleteCookbookEntry(id);
+      // WebSocket broadcast will trigger getCookbook() to refresh the cache
+      return;
     } catch {}
   }
 

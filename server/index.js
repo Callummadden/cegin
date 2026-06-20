@@ -25,7 +25,6 @@ const {
 const ai = require('./ai');
 const { signToken, authMiddleware, hashPassword, comparePassword } = require('./auth');
 const dbModule = require('./db');
-const { OAuth2Client } = require('google-auth-library');
 const { startCron } = require('./cron');
 const { sendPush } = require('./notifications');
 const { WebSocketServer } = require('ws');
@@ -111,9 +110,6 @@ app.use('/api', (req, res, next) => {
   return authMiddleware(dbModule)(req, res, next);
 });
 
-// OAuth callback routes (not under /api, no auth needed)
-// These are already excluded since they're not under /api
-
 // Health check — the app uses this to test the connection in Settings
 // Also returns version info so the client can check if it's outdated
 const SERVER_VERSION = require('./package.json').version;
@@ -153,104 +149,6 @@ app.post('/api/auth/login', async (req, res) => {
   if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
   const token = signToken(user);
   res.json({ token, user: { id: user.id, email: user.email, displayName: user.display_name } });
-});
-
-// Google OAuth redirect flow (server-side)
-app.get('/auth/google/redirect', (req, res) => {
-  const clientId = readConfig('GOOGLE_CLIENT_ID');
-  if (!clientId) return res.status(503).json({ error: 'Google Sign-In not configured' });
-  const redirectUri = encodeURIComponent(process.env.REDIRECT_URI || `${process.env.APP_URL || 'http://localhost:3000'}/auth/google/callback`);
-  const scope = encodeURIComponent('openid email profile');
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline`;
-  res.redirect(url);
-});
-
-// Google OAuth callback
-app.get('/auth/google/callback', async (req, res) => {
-  const { code } = req.query;
-  if (!code) return res.status(400).send('No code provided');
-  const clientId = readConfig('GOOGLE_CLIENT_ID');
-  const clientSecret = readSecret('GOOGLE_CLIENT_SECRET');
-  const redirectUri = process.env.REDIRECT_URI || `${process.env.APP_URL || 'http://localhost:3000'}/auth/google/callback`;
-  try {
-    // S2-5: URL-encode all body parameters
-    const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }).toString(),
-      signal: AbortSignal.timeout(30000), // S2-12
-    });
-    const tokens = await tokenResp.json();
-    if (!tokens.access_token) return res.status(401).send('Token exchange failed');
-
-    // Get user info
-    const userResp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
-      signal: AbortSignal.timeout(30000), // S2-12
-    });
-    const userinfo = await userResp.json();
-    if (!userinfo.email) return res.status(401).send('Could not get email from Google');
-    const email = userinfo.email.toLowerCase().trim();
-    const name = userinfo.name || '';
-
-    let user = dbModule.getUserByEmail(email);
-    if (!user) {
-      user = dbModule.createUser(email, 'google-auth', name);
-    }
-
-    const token = signToken(user);
-    // S2-15: Use fragment (#) instead of query param, and encode the token
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
-    res.redirect(`${appUrl}/auth/callback#token=${encodeURIComponent(token)}`);
-  } catch (e) {
-    res.status(500).send('Authentication failed');
-  }
-});
-
-app.post('/api/auth/google', async (req, res) => {
-  const { idToken, accessToken } = req.body;
-  if (!idToken && !accessToken) return res.status(400).json({ error: 'idToken or accessToken required' });
-  try {
-    let email, name;
-
-    if (idToken) {
-      // Native Google Sign-In — verify the ID token properly using google-auth-library
-      const client = new OAuth2Client(readConfig('GOOGLE_CLIENT_ID'));
-      const ticket = await client.verifyIdToken({ idToken, audience: readConfig('GOOGLE_CLIENT_ID') });
-      const payload = ticket.getPayload();
-      if (!payload.email) return res.status(401).json({ error: 'No email in token' });
-      if (!payload.email_verified) return res.status(401).json({ error: 'Email not verified' });
-      email = payload.email.toLowerCase().trim();
-      name = payload.name || '';
-    } else {
-      // Web OAuth flow — verify access token via userinfo
-      const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal: AbortSignal.timeout(30000), // S2-12
-      });
-      if (!resp.ok) return res.status(401).json({ error: 'Invalid Google token' });
-      const payload = await resp.json();
-      if (!payload.email) return res.status(401).json({ error: 'Could not get email from Google' });
-      email = payload.email.toLowerCase().trim();
-      name = payload.name || '';
-    }
-
-    let user = dbModule.getUserByEmail(email);
-    if (!user) {
-      user = dbModule.createUser(email, 'google-auth', name);
-    }
-
-    const token = signToken(user);
-    res.json({ token, user: { id: user.id, email: user.email, displayName: user.display_name } });
-  } catch (e) {
-    res.status(401).json({ error: 'Invalid Google token' });
-  }
 });
 
 app.get('/api/auth/me', authMiddleware(dbModule), (req, res) => {
@@ -476,6 +374,19 @@ app.post('/api/ai/scan-fridge', async (req, res) => {
   }
   try {
     const result = await ai.scanFridge(image);
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.post('/api/ai/scan-recipe', async (req, res) => {
+  const { image } = req.body; // base64 JPEG (no data: prefix)
+  if (!image) {
+    return res.status(400).json({ error: 'image is required (base64 JPEG)' });
+  }
+  try {
+    const result = await ai.scanRecipeImage(image);
     res.json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });

@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { recognizeText } from '@infinitered/react-native-mlkit-text-recognition';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { api } from '../api';
 import { MONO, useTheme } from '../theme';
 import AppModal from '../components/AppModal';
@@ -43,6 +43,34 @@ export default function ScanRecipeScreen({ navigation }) {
   const [tags, setTags] = useState('');
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState(null);
+  const [cleaning, setCleaning] = useState(false);
+
+  const cleanWithTerry = async () => {
+    if (!imageUri) return;
+    setCleaning(true);
+    try {
+      // Compress and resize for faster upload
+      const manipulated = await manipulateAsync(imageUri, [{ resize: { width: 1024 } }], { compress: 0.7, format: SaveFormat.JPEG, base64: true });
+      const recipe = await api.scanRecipe(manipulated.base64);
+      // Fill in the fields with AI results
+      if (recipe.title) setTitle(recipe.title);
+      if (recipe.ingredients?.length) setIngredients(recipe.ingredients.join('\n'));
+      if (recipe.steps?.length) setInstructions(recipe.steps.join('\n'));
+      if (recipe.prep_minutes) setPrepTime(String(recipe.prep_minutes));
+      if (recipe.cook_minutes) setCookTime(String(recipe.cook_minutes));
+      if (recipe.servings) setServings(String(recipe.servings));
+      if (recipe.tags?.length) setTags(recipe.tags.join(', '));
+      setParsed(true);
+    } catch (e) {
+      setModal({
+        title: 'Terry couldn\'t read it',
+        message: e.message || 'Make sure your vision AI is configured in Settings.',
+        buttons: [{ text: 'OK', primary: true }],
+      });
+    } finally {
+      setCleaning(false);
+    }
+  };
 
   const processImage = async (uri) => {
     setImageUri(uri);
@@ -51,6 +79,7 @@ export default function ScanRecipeScreen({ navigation }) {
     setParsed(false);
 
     try {
+      const { recognizeText } = require('@infinitered/react-native-mlkit-text-recognition');
       const result = await recognizeText(uri);
       // recognizeText returns { text, blocks } on some versions, or just a string
       const text = typeof result === 'string' ? result : result?.text ?? '';
@@ -351,6 +380,26 @@ export default function ScanRecipeScreen({ navigation }) {
               />
             </View>
 
+            {/* Clean with Terry */}
+            {imageUri && (
+              <View style={{ marginBottom: 16 }}>
+                <Pressable
+                  style={[styles.saveBtn, { borderColor: colors.primary, backgroundColor: colors.surface, borderWidth: 1.5 }, cleaning && styles.disabled]}
+                  onPress={cleanWithTerry}
+                  disabled={cleaning}
+                >
+                  {cleaning ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Text style={[styles.saveBtnText, { color: colors.primary }]}>✨ CLEAN & FIX WITH TERRY</Text>
+                  )}
+                </Pressable>
+                <Text style={[styles.hint, { color: colors.textMuted, textAlign: 'center', marginTop: 8 }]}>
+                  Your photo will be shared with your configured vision AI to extract the recipe.
+                </Text>
+              </View>
+            )}
+
             {/* Save */}
             <Pressable
               style={[styles.saveBtn, { backgroundColor: colors.primary }, saving && styles.disabled]}
@@ -440,4 +489,5 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   },
   saveBtnText: { fontSize: fs(15), fontWeight: '900', letterSpacing: 1 },
   disabled: { opacity: 0.6 },
+  hint: { fontSize: 12, lineHeight: 18, marginTop: 4 },
 });

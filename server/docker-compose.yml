@@ -37,7 +37,6 @@ services:
       - TEXT_API_KEY
       - VISION_API_KEY
       - JWT_SECRET
-      - GOOGLE_CLIENT_SECRET
     restart: unless-stopped
 
     # Healthcheck uses the built-in /api/health endpoint.
@@ -64,8 +63,6 @@ secrets:
     file: ./secrets/VISION_API_KEY
   JWT_SECRET:
     file: ./secrets/JWT_SECRET
-  GOOGLE_CLIENT_SECRET:
-    file: ./secrets/GOOGLE_CLIENT_SECRET
 
 # Named volume for the database. Back it up with:
 # docker run --rm -v cegin-data:/data -v "$PWD":/backup alpine cp /data/recipes.db /backup/recipes.db.bak
