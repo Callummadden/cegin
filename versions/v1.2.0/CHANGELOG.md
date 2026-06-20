@@ -60,3 +60,10 @@ Released: June 19, 2026
 - Fixed standalone components (`TerryAvatar`, `HistoryModal`, `MessageBubble`, `TypingDots`, `ToggleRow`) referencing `styles` from parent scope — now passed as prop
 - Fixed search saving partial words while typing — now only saves on submit
 - Removed import URL section from manual recipe edit page
+- Fixed cookbook entries duplicating in server mode — was double-writing to local cache and WebSocket refresh
+- Fixed delete/update cookbook entries also double-writing
+- Fixed scan recipe crashing app on startup by lazy-loading ML Kit native module
+- Added vision-based recipe scanning (Clean & Fix with Terry) — sends photo to configured vision AI
+- Added privacy note that photo is shared with configured vision AI
+- Image URL field replaced with Camera/Gallery buttons on manual recipe page
+- Terry vision API endpoint: POST /api/ai/scan-recipe
