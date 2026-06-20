@@ -13,7 +13,7 @@ import {
   AppState,
   Vibration,
 } from 'react-native';
-import { useKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
 import { createAudioPlayer } from 'expo-audio';
 import { requestPermissions, scheduleNotification, cancelNotification } from '../notifications';
@@ -95,7 +95,6 @@ const ADJUST_SHORTCUTS = [
 // ─── Component ───────────────────────────────────────────────────
 
 export default function CookModeScreen({ route, navigation }) {
-  useKeepAwake();
   const { colors } = useTheme();
   const { s, fs } = useResponsive();
   const { noAI } = useAi();
@@ -129,10 +128,23 @@ export default function CookModeScreen({ route, navigation }) {
   const [adjustError, setAdjustError] = useState(null);
 
   // ─── Multi-timer state (from global context) ─────────────────
-  const { timers, startTimer, pauseTimer, resumeTimer, cancelTimer, setActiveRecipe, setActiveStep } = useTimers();
+  const { timers, startTimer, pauseTimer, resumeTimer, cancelTimer, setActiveRecipe, setActiveStep, registerStopAlarm } = useTimers();
   // Track which timers we already spoke on, so we don't repeat
   const spokeRef = useRef(new Set());
-  const vibratingRef = useRef({}); // { [timerId]: intervalId }
+  const vibratingRef = useRef({}); // { [timerId]: audioPlayer }
+
+  // Register alarm stopper so cancelTimer can call it before removing from state
+  useEffect(() => {
+    registerStopAlarm((timerId) => {
+      Vibration.cancel();
+      const player = vibratingRef.current[timerId];
+      if (player) {
+        try { player.stop(); } catch {}
+        try { player.release(); } catch {}
+        delete vibratingRef.current[timerId];
+      }
+    });
+  }, [registerStopAlarm]);
 
   const ci = Math.min(step, len - 1);
   const currentStep = activeSteps[ci] || '';
@@ -150,6 +162,31 @@ export default function CookModeScreen({ route, navigation }) {
     setActiveStep(ci);
   }, [ci]);
 
+  // ─── Re-sync step from route params when screen regains focus ─
+  // (e.g. user taps RETURN on the global timer bar)
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => {
+      const paramStep = route.params?.step;
+      if (paramStep != null && paramStep !== step) {
+        setStep(paramStep);
+      }
+    });
+    return unsub;
+  }, [navigation, route.params?.step, step]);
+
+  // ─── Keep awake only when focused ────────────────────────────
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => {
+      activateKeepAwakeAsync();
+    });
+    // Activate on initial mount if already focused
+    activateKeepAwakeAsync();
+    return () => {
+      unsub();
+      deactivateKeepAwake();
+    };
+  }, [navigation]);
+
   // ─── Request notification permissions ─────────────────────────
   useEffect(() => {
     requestPermissions();
@@ -166,12 +203,6 @@ export default function CookModeScreen({ route, navigation }) {
         player.play();
         vibratingRef.current[id] = player;
       }
-      // Stop vibration when timer is no longer done (reset/deleted)
-      if (!t.done && vibratingRef.current[id]) {
-        Vibration.cancel();
-        vibratingRef.current[id]?.release?.();
-        delete vibratingRef.current[id];
-      }
     }
   }, [timers]);
 
@@ -179,7 +210,8 @@ export default function CookModeScreen({ route, navigation }) {
   useEffect(() => {
     return () => {
       for (const player of Object.values(vibratingRef.current)) {
-        player?.release?.();
+        try { player?.stop?.(); } catch {}
+        try { player?.release?.(); } catch {}
       }
       Vibration.cancel();
     };
@@ -189,36 +221,6 @@ export default function CookModeScreen({ route, navigation }) {
   const startTimerFromStep = useCallback(async (timerId, minutes, label) => {
     await startTimer(timerId, minutes * 60, label || `${minutes} min`);
   }, [startTimer]);
-
-  // ─── Vibrate when a timer finishes ───────────────────────────
-  useEffect(() => {
-    for (const [id, t] of Object.entries(timers)) {
-      if (t.done && !spokeRef.current.has(id)) {
-        spokeRef.current.add(id);
-        Vibration.vibrate([500, 200, 500, 200], true);
-        const player = createAudioPlayer(require('../../assets/timer-alarm.wav'));
-        player.loop = true;
-        player.play();
-        vibratingRef.current[id] = player;
-      }
-      // Stop vibration when timer is no longer done (reset/deleted)
-      if (!t.done && vibratingRef.current[id]) {
-        Vibration.cancel();
-        vibratingRef.current[id]?.release?.();
-        delete vibratingRef.current[id];
-      }
-    }
-  }, [timers]);
-
-  // Cleanup vibration on unmount
-  useEffect(() => {
-    return () => {
-      for (const player of Object.values(vibratingRef.current)) {
-        player?.release?.();
-      }
-      Vibration.cancel();
-    };
-  }, []);
 
   const progress = Math.round(((ci + 1) / len) * 100);
 

@@ -34,7 +34,7 @@ export default function GlobalTimerBar() {
   const styles = useMemo(() => makeStyles(colors, s, fs, insets, isCookMode), [colors, s, fs, insets, isCookMode]);
 
   const activeTimers = useMemo(
-    () => Object.entries(timers).filter(([, t]) => !t.done),
+    () => Object.entries(timers),
     [timers]
   );
 
@@ -52,7 +52,7 @@ export default function GlobalTimerBar() {
         {activeTimers.map(([id, t]) => (
           <Pressable
             key={id}
-            style={[styles.pill, { borderColor: t.running ? colors.primary : colors.border }]}
+            style={[styles.pill, { borderColor: t.done ? colors.success : t.running ? colors.primary : colors.border }]}
             onPress={navigateToCookMode}
           >
             <Text style={[styles.label, { fontFamily: MONO, color: colors.textMuted }]} numberOfLines={1}>
@@ -62,7 +62,13 @@ export default function GlobalTimerBar() {
               {fmtClock(t.left)}
             </Text>
             <View style={styles.actions}>
-              {!t.done && (
+              {t.done ? (
+                <Pressable onPress={() => cancelTimer(id)} style={[styles.actionBtn, { backgroundColor: colors.success + '20', borderRadius: s(10), paddingHorizontal: s(8) }]}>
+                  <Text style={[styles.actionText, { color: colors.success, fontSize: fs(10), fontWeight: '700' }]}>
+                    DISMISS
+                  </Text>
+                </Pressable>
+              ) : (
                 <Pressable onPress={() => t.running ? pauseTimer(id) : resumeTimer(id)} style={styles.actionBtn}>
                   <Text style={[styles.actionText, { color: colors.primary }]}>
                     {t.running ? '⏸' : '▶'}
