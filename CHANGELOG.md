@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.4 — 2026-06-20
+
+### Timer Notifications
+- Fixed notification trigger format for SDK 56 (old format silently rejected)
+- Fixed duplicate timer notifications — one per timer, scheduled at start
+- Timer uses `setAlarmClock()` for exact scheduling (bypasses OEM battery optimization)
+- Notification channel initialized eagerly at app startup
+
+### Timer Alarm
+- Fixed timer alarm not stopping when dismissed (audio kept looping)
+- Fixed `player.stop()` not being called before `player.release()` on Android
+
+### Timer Accuracy
+- Fixed timer drift — now uses wall-clock time instead of interval counting
+- Timer and notification stay perfectly in sync
+
+### Timer Bar
+- Tap timer pill to jump back to the exact step in cook mode
+- Finished timers stay visible in the bar with green border and "0:00"
+- DISMISS button to clear a finished timer (stops alarm and vibration)
+- Cook mode stays mounted in background — returning from timer bar is instant
+- Keep-awake only active when cook mode is focused
+
 ## 1.2.3 — 2026-06-20
 
 ### Terry Vision

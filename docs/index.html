@@ -59,7 +59,7 @@
       <div class="hero-content">
         <div class="hero-badge mono">
           <span>●</span> Self-hosted · Offline-first · MIT
-          <span class="version-badge">v1.2.3</span>
+          <span class="version-badge">v1.2.4</span>
         </div>
         <p class="hero-tagline">your kitchen, organised</p>
         <h1>Cook smarter.<br>Own your recipes.</h1>
@@ -897,6 +897,20 @@ docker compose up -d</div>
       <div class="changelog-grid">
         <article class="changelog-card">
           <div class="changelog-header">
+            <h3>v1.2.4</h3>
+            <span class="changelog-status released">Released</span>
+          </div>
+          <p class="changelog-date mono">June 20, 2026</p>
+          <ul>
+            <li>Fixed timer notifications for SDK 56</li>
+            <li>Timer uses wall-clock time — no more drift</li>
+            <li>Alarm stops immediately on DISMISS</li>
+            <li>Exact scheduling via setAlarmClock()</li>
+          </ul>
+          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.2.4" target="_blank" rel="noopener noreferrer">Download v1.2.4 →</a>
+        </article>
+        <article class="changelog-card">
+          <div class="changelog-header">
             <h3>v1.2.3</h3>
             <span class="changelog-status released">Released</span>
           </div>
@@ -905,9 +919,7 @@ docker compose up -d</div>
             <li>Terry Vision photos sync to server across devices</li>
             <li>Terry AI can add to shopping list, meal plan, and save recipes from chat</li>
             <li>Global timer bar on every screen — tap to jump back to cook step</li>
-            <li>Timer background notifications when app is closed</li>
             <li>Instant recipe delete with undo toast</li>
-            <li>WebSocket keepalive and reconnection improvements</li>
           </ul>
           <a href="https://github.com/Callummadden/cegin/releases/tag/v1.2.3" target="_blank" rel="noopener noreferrer">Download v1.2.3 →</a>
         </article>
@@ -941,77 +953,6 @@ docker compose up -d</div>
             <li>Fixed scan recipe crash on startup</li>
           </ul>
           <a href="https://github.com/Callummadden/cegin/releases/tag/v1.2.1" target="_blank" rel="noopener noreferrer">Download v1.2.1 →</a>
-        </article>
-        <article class="changelog-card">
-          <div class="changelog-header">
-            <h3>v1.2.0</h3>
-            <span class="changelog-status released">Released</span>
-          </div>
-          <p class="changelog-date mono">June 20, 2026</p>
-          <ul>
-            <li>Scan Recipe — on-device OCR from photos</li>
-            <li>Floating pill-shaped nav bars</li>
-            <li>Material You wallpaper accent colors</li>
-            <li>WebSocket real-time sync between devices</li>
-          </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.2.0" target="_blank" rel="noopener noreferrer">Download v1.2.0 →</a>
-        </article>
-        <article class="changelog-card">
-          <div class="changelog-header">
-            <h3>v1.1.6</h3>
-            <span class="changelog-status released">Released</span>
-          </div>
-          <p class="changelog-date mono">June 19, 2026</p>
-          <ul>
-            <li>Reduced memory usage by ~35%</li>
-            <li>Instant cache-first loading for stats, recipes, and cookbook</li>
-            <li>Server: image proxy with on-the-fly resizing</li>
-            <li>Server: auto-generate JWT_SECRET if not set</li>
-            <li>Fixed meal plan sync 500 errors</li>
-            <li>Fixed 413 errors when uploading cookbook photos</li>
-            <li>Fixed server cache not clearing when switching servers</li>
-          </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.1.6" target="_blank" rel="noopener noreferrer">Download v1.1.6 →</a>
-        </article>
-        <article class="changelog-card">
-          <div class="changelog-header">
-            <h3>v1.1.5</h3>
-            <span class="changelog-status released">Released</span>
-          </div>
-          <p class="changelog-date mono">June 19, 2026</p>
-          <ul>
-            <li>Fixed cookbook photos not uploading</li>
-            <li>Removed developer settings warning modal</li>
-          </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.1.5" target="_blank" rel="noopener noreferrer">Download v1.1.5 →</a>
-        </article>
-        <article class="changelog-card">
-          <div class="changelog-header">
-            <h3>v1.1.4</h3>
-            <span class="changelog-status released">Released</span>
-          </div>
-          <p class="changelog-date mono">June 19, 2026</p>
-          <ul>
-            <li>Fixed meal plan not syncing to server</li>
-            <li>Fixed cookbook photos not displaying</li>
-            <li>Fixed open mode crashes for notifications and scanned items</li>
-            <li>Fixed GENERATE LIST button overlapping bottom nav</li>
-          </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.1.4" target="_blank" rel="noopener noreferrer">Download v1.1.4 →</a>
-        </article>
-        <article class="changelog-card">
-          <div class="changelog-header">
-            <h3>v1.1.3</h3>
-            <span class="changelog-status released">Released</span>
-          </div>
-          <p class="changelog-date mono">June 19, 2026</p>
-          <ul>
-            <li>Save and switch between multiple server URLs</li>
-            <li>Existing server users skip setup wizard</li>
-            <li>All data syncs to server</li>
-            <li>Kitchen log photos upload to server</li>
-          </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.1.3" target="_blank" rel="noopener noreferrer">Download v1.1.3 →</a>
         </article>
       </div>
       <div style="text-align: center; margin-top: 24px;">
