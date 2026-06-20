@@ -24,7 +24,6 @@ Set up secrets (API keys and JWT secret — never in .env):
 mkdir -p secrets && chmod 700 secrets
 echo "sk-your-text-key"        > secrets/TEXT_API_KEY
 echo "AIza-your-vision-key"    > secrets/VISION_API_KEY
-echo "a-long-random-string"    > secrets/JWT_SECRET
 chmod 600 secrets/*
 ```
 Start the server:
