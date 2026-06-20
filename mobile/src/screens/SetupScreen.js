@@ -20,6 +20,7 @@ import { addDietaryProfile, getDietaryProfiles, removeDietaryProfile } from '../
 import { getPermissionStatus, requestPermissionAndGetStatus, getPushToken } from '../notifications';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '../api';
+import { useResponsive } from '../utils/responsive';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -45,7 +46,8 @@ const FEATURES = [
 export default function SetupScreen({ route, navigation }) {
   const { colors, palette, setPalette, mode, setMode, scheme, oledAccent, setOledAccent, materialYouSeed, setMaterialYouSeed } = useTheme();
   const { setNoAI } = useAi();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { s, fs } = useResponsive();
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
   const switching = route.params?.switching;
 
@@ -856,149 +858,151 @@ export default function SetupScreen({ route, navigation }) {
 
 // ── Styles ─────────────────────────────────────────────────────────────────
 
-function makeStyles(c) {
+function makeStyles(c, s, fs) {
   return StyleSheet.create({
+
     root: {
       flex: 1,
       backgroundColor: c.background,
-      paddingHorizontal: 24,
+      paddingHorizontal: s(24),
     },
 
     // Welcome
     welcomeCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    welcomeEmoji: { fontSize: 72, marginBottom: 16 },
-    welcomeTitle: { fontSize: 32, fontWeight: '900', color: c.text, letterSpacing: 2 },
-    welcomeTagline: { fontSize: 13, letterSpacing: 2, marginTop: 8 },
+    welcomeEmoji: { fontSize: fs(72), marginBottom: s(16) },
+    welcomeTitle: { fontSize: fs(32), fontWeight: '900', color: c.text, letterSpacing: 2 },
+    welcomeTagline: { fontSize: fs(13), letterSpacing: 2, marginTop: s(8) },
     welcomeBottom: { alignItems: 'center' },
 
     // Features
     featuresTop: { flex: 1, justifyContent: 'center' },
-    featureSlide: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
-    featureIcon: { fontSize: 56, marginBottom: 20 },
-    featureTitle: { fontSize: 20, fontWeight: '900', letterSpacing: 1, marginBottom: 12, textAlign: 'center' },
-    featureDesc: { fontSize: 15, textAlign: 'center', lineHeight: 22, paddingHorizontal: 10 },
-    dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 24 },
-    dot: { width: 8, height: 8, borderRadius: 4 },
+    featureSlide: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: s(20) },
+    featureIcon: { fontSize: fs(56), marginBottom: s(20) },
+    featureTitle: { fontSize: fs(20), fontWeight: '900', letterSpacing: 1, marginBottom: s(12), textAlign: 'center' },
+    featureDesc: { fontSize: fs(15), textAlign: 'center', lineHeight: fs(22), paddingHorizontal: s(10) },
+    dots: { flexDirection: 'row', justifyContent: 'center', gap: s(8), marginTop: s(24) },
+    dot: { width: s(8), height: s(8), borderRadius: s(4) },
     featuresBottom: { alignItems: 'center' },
 
     // Common buttons
     primaryBtn: {
-      borderRadius: 14,
-      paddingVertical: 16,
+      borderRadius: s(20),
+      paddingVertical: s(16),
       alignItems: 'center',
       width: '100%',
     },
     primaryBtnText: {
-      fontSize: 14,
+      fontSize: fs(14),
       fontWeight: '900',
       letterSpacing: 1.5,
     },
-    skipBtn: { marginTop: 16, padding: 8 },
-    skipText: { fontSize: 11, letterSpacing: 1.5 },
-    backBtn: { alignSelf: 'flex-start', marginBottom: 16, paddingVertical: 6, paddingHorizontal: 2 },
-    backText: { fontSize: 15, fontWeight: '600' },
+    skipBtn: { marginTop: s(16), padding: s(8) },
+    skipText: { fontSize: fs(11), letterSpacing: 1.5 },
+    backBtn: { alignSelf: 'flex-start', marginBottom: s(16), paddingVertical: s(6), paddingHorizontal: s(2) },
+    backText: { fontSize: fs(15), fontWeight: '600' },
 
     // Step headers
-    stepTitle: { fontSize: 22, fontWeight: '900', letterSpacing: 0.5, textAlign: 'center', marginBottom: 6 },
-    stepSub: { fontSize: 12, textAlign: 'center', marginBottom: 28, lineHeight: 18, paddingHorizontal: 8 },
+    stepTitle: { fontSize: fs(22), fontWeight: '900', letterSpacing: 0.5, textAlign: 'center', marginBottom: s(6) },
+    stepSub: { fontSize: fs(12), textAlign: 'center', marginBottom: s(28), lineHeight: fs(18), paddingHorizontal: s(8) },
 
     // Mode cards
-    modeCards: { gap: 14 },
+    modeCards: { gap: s(14) },
     modeCard: {
-      borderRadius: 18,
+      borderRadius: s(18),
       borderWidth: 1.5,
-      padding: 24,
+      padding: s(24),
       alignItems: 'center',
     },
-    modeIcon: { fontSize: 36, marginBottom: 10 },
-    modeTitle: { fontSize: 15, fontWeight: '900', letterSpacing: 0.5, marginBottom: 6 },
-    modeDesc: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
+    modeIcon: { fontSize: fs(36), marginBottom: s(10) },
+    modeTitle: { fontSize: fs(15), fontWeight: '900', letterSpacing: 0.5, marginBottom: s(6) },
+    modeDesc: { fontSize: fs(13), textAlign: 'center', lineHeight: fs(19) },
 
     // Form
-    fieldGroup: { marginBottom: 20 },
-    label: { fontFamily: MONO, fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
-    hint: { fontSize: 12, marginBottom: 8 },
+    fieldGroup: { marginBottom: s(20) },
+    label: { fontFamily: MONO, fontSize: fs(11), fontWeight: '900', letterSpacing: 1, marginBottom: s(4) },
+    hint: { fontSize: fs(12), marginBottom: s(8) },
     input: {
       borderWidth: 1.5,
-      borderRadius: 12,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      fontSize: 15,
-      marginBottom: 8,
+      borderRadius: s(16),
+      paddingHorizontal: s(16),
+      paddingVertical: s(14),
+      fontSize: fs(15),
+      marginBottom: s(8),
     },
-    error: { fontSize: 13, textAlign: 'center', marginBottom: 12 },
-    segmentRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+    error: { fontSize: fs(13), textAlign: 'center', marginBottom: s(12) },
+    segmentRow: { flexDirection: 'row', gap: s(8), marginBottom: s(10) },
     segmentItem: {
       flex: 1,
       borderWidth: 1.5,
-      borderRadius: 10,
-      paddingVertical: 8,
+      borderRadius: s(10),
+      paddingVertical: s(8),
       alignItems: 'center',
     },
-    segmentText: { fontFamily: MONO, fontSize: 12, fontWeight: '700' },
+    segmentText: { fontFamily: MONO, fontSize: fs(12), fontWeight: '700' },
 
     // Theme
-    themeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+    themeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: s(10), marginBottom: s(20) },
     themeCard: {
       width: '30%',
       borderWidth: 1.5,
-      borderRadius: 14,
-      padding: 14,
+      borderRadius: s(18),
+      padding: s(14),
       alignItems: 'center',
     },
-    themeSwatch: { width: 28, height: 28, borderRadius: 14, marginBottom: 8 },
-    themeName: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
-    oledSection: { marginBottom: 20 },
-    oledGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 },
+    themeSwatch: { width: s(28), height: s(28), borderRadius: s(14), marginBottom: s(8) },
+    themeName: { fontSize: fs(10), fontWeight: '900', letterSpacing: 0.5 },
+    oledSection: { marginBottom: s(20) },
+    oledGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: s(10), marginTop: s(8) },
     oledDot: {
-      width: 36, height: 36, borderRadius: 18,
+      width: s(36), height: s(36), borderRadius: s(18),
       alignItems: 'center', justifyContent: 'center',
       borderWidth: 3,
     },
     modeToggle: {
       flexDirection: 'row',
       borderWidth: 1.5,
-      borderRadius: 12,
+      borderRadius: s(12),
       overflow: 'hidden',
-      marginBottom: 24,
+      marginBottom: s(24),
     },
-    modeToggleItem: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-    modeToggleText: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+    modeToggleItem: { flex: 1, paddingVertical: s(12), alignItems: 'center' },
+    modeToggleText: { fontSize: fs(11), fontWeight: '700', letterSpacing: 1 },
 
     // Ready
     readyCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    readyEmoji: { fontSize: 72, marginBottom: 16 },
-    readyTitle: { fontSize: 26, fontWeight: '900', letterSpacing: 1, marginBottom: 8 },
-    readySub: { fontSize: 13, letterSpacing: 1 },
+    readyEmoji: { fontSize: fs(72), marginBottom: s(16) },
+    readyTitle: { fontSize: fs(26), fontWeight: '900', letterSpacing: 1, marginBottom: s(8) },
+    readySub: { fontSize: fs(13), letterSpacing: 1 },
     readyBottom: { alignItems: 'center' },
 
     // Diet
-    profileCard: { borderWidth: 1.5, borderRadius: 12, padding: 14, marginBottom: 8 },
+    profileCard: { borderWidth: 1.5, borderRadius: s(18), padding: s(14), marginBottom: s(8) },
     profileHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    profileName: { fontSize: 15, fontWeight: '900' },
-    profileNeeds: { fontSize: 12, letterSpacing: 0.5, marginTop: 4 },
-    profileNotes: { fontSize: 12, lineHeight: 18, marginTop: 4 },
-    dietForm: { borderWidth: 1.5, borderRadius: 14, padding: 16, marginTop: 12 },
-    addBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
-    addBtnText: { fontSize: 11, letterSpacing: 1 },
+    profileName: { fontSize: fs(15), fontWeight: '900' },
+    profileNeeds: { fontSize: fs(12), letterSpacing: 0.5, marginTop: s(4) },
+    profileNotes: { fontSize: fs(12), lineHeight: fs(18), marginTop: s(4) },
+    dietForm: { borderWidth: 1.5, borderRadius: s(14), padding: s(16), marginTop: s(12) },
+    addBtn: { borderWidth: 1.5, borderRadius: s(20), paddingVertical: s(12), alignItems: 'center', marginTop: s(4) },
+    addBtnText: { fontSize: fs(11), letterSpacing: 1 },
 
     // Permissions
-    permCard: { borderWidth: 1.5, borderRadius: 14, padding: 18, marginBottom: 12 },
-    permCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
-    permIcon: { fontSize: 28 },
-    permTitle: { fontSize: 15, fontWeight: '900' },
-    permDesc: { fontSize: 12, lineHeight: 18, marginTop: 4 },
-    permBadge: { borderWidth: 1.5, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-    permBadgeText: { fontSize: 11, letterSpacing: 1, fontWeight: '900' },
-    permBtn: { borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-    permBtnText: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+    permCard: { borderWidth: 1.5, borderRadius: s(14), padding: s(18), marginBottom: s(12) },
+    permCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: s(12), marginBottom: s(14) },
+    permIcon: { fontSize: fs(28) },
+    permTitle: { fontSize: fs(15), fontWeight: '900' },
+    permDesc: { fontSize: fs(12), lineHeight: fs(18), marginTop: s(4) },
+    permBadge: { borderWidth: 1.5, borderRadius: s(12), paddingVertical: s(8), alignItems: 'center' },
+    permBadgeText: { fontSize: fs(11), letterSpacing: 1, fontWeight: '900' },
+    permBtn: { borderRadius: s(20), paddingVertical: s(12), alignItems: 'center' },
+    permBtnText: { fontSize: fs(12), fontWeight: '900', letterSpacing: 1 },
 
     // Model discovery
-    discoverBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 4, marginBottom: 8 },
-    discoverBtnText: { fontSize: 11, letterSpacing: 1, fontWeight: '700' },
-    modelDropdown: { borderWidth: 1.5, borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
-    modelOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1 },
-    modelOptionText: { fontSize: 13, flex: 1, marginRight: 8 },
-    modelDropdownClose: { paddingVertical: 10, alignItems: 'center', borderTopWidth: 1 },
+    discoverBtn: { borderWidth: 1.5, borderRadius: s(20), paddingVertical: s(10), alignItems: 'center', marginTop: s(4), marginBottom: s(8) },
+    discoverBtnText: { fontSize: fs(11), letterSpacing: 1, fontWeight: '700' },
+    modelDropdown: { borderWidth: 1.5, borderRadius: s(12), overflow: 'hidden', marginBottom: s(8) },
+    modelOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: s(12), paddingHorizontal: s(14), borderBottomWidth: 1 },
+    modelOptionText: { fontSize: fs(13), flex: 1, marginRight: s(8) },
+    modelDropdownClose: { paddingVertical: s(10), alignItems: 'center', borderTopWidth: 1 },
+  
   });
 }

@@ -16,6 +16,7 @@ import {
 import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import { MONO, useTheme } from '../theme';
+import { subscribe } from '../wsSync';
 import { getCookbook, deleteCookbookEntry, updateCookbookEntry, clearCookbook } from '../cookbook';
 import { getStats, getTopRecipes, getCookingStreak } from '../stats';
 import { api } from '../api';
@@ -24,10 +25,12 @@ import BottomNav from '../components/BottomNav';
 import { useToast } from '../components/Toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import { useResponsive } from '../utils/responsive';
 
 const DELETE_WIDTH = 80;
 
 const swipeStyles = StyleSheet.create({
+
   outer: { position: 'relative', overflow: 'hidden' },
   deleteBg: {
     position: 'absolute', top: 0, right: 0, bottom: 0,
@@ -35,16 +38,17 @@ const swipeStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#E5645B',
-    borderRadius: 16,
+    borderRadius: 20,
     zIndex: 0,
   },
   deleteBtn: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 20,
   },
   deleteText: { color: '#fff', fontWeight: '700', fontSize: 11 },
-});
+
+  });
 
 function SwipeableRow({ onDelete, children, colors }) {
   const translateX = useRef(new Animated.Value(0)).current;
@@ -107,7 +111,8 @@ function formatDate(iso) {
 
 export default function CookbookScreen({ navigation }) {
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { s, fs } = useResponsive();
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const pendingDeleteRef = useRef(null);
@@ -180,28 +185,37 @@ export default function CookbookScreen({ navigation }) {
     });
   }, [showToast]);
 
-  const load = useCallback(async () => {
-    // Show cached data instantly
+  const load = useCallback(async (forceRefresh = false) => {
     const [cachedEntries, cachedStats] = await Promise.all([
-      getCookbook(),
-      getStats(),
+      getCookbook(forceRefresh),
+      getStats(forceRefresh),
     ]);
     setEntries(cachedEntries);
     setStats(cachedStats);
     setTopRecipes(cachedStats.topRecipes || []);
     setStreak(cachedStats.streak || 0);
 
-    // Fetch fresh data — update each as it arrives, don't block on the slowest
-    getCookbook().then(setEntries).catch(() => {});
-    getStats().then(s => { setStats(s); setTopRecipes(s.topRecipes || []); setStreak(s.streak || 0); }).catch(() => {});
-    api.listRecipes().then(setRecipes).catch(() => {});
+    if (!forceRefresh) {
+      getCookbook().then(setEntries).catch(() => {});
+      getStats().then(s => { setStats(s); setTopRecipes(s.topRecipes || []); setStreak(s.streak || 0); }).catch(() => {});
+      api.listRecipes().then(setRecipes).catch(() => {});
+    }
+    if (forceRefresh) {
+      api.listRecipes(null, { forceRefresh: true }).then(setRecipes).catch(() => {});
+    }
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  useEffect(() => {
+    const unsub1 = subscribe('cookbook', () => load(true));
+    const unsub2 = subscribe('stats', () => load(true));
+    return () => { unsub1(); unsub2(); };
+  }, [load]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -439,7 +453,7 @@ export default function CookbookScreen({ navigation }) {
   );
 }
 
-const makeStyles = (colors) => StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
   root: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -448,7 +462,7 @@ const makeStyles = (colors) => StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 0,
   },
-  backBtn: { width: 38, height: 38, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 38, height: 38, borderRadius: 20, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   screenTitle: { fontSize: 19, fontWeight: '900', letterSpacing: 0.5 },
   clearBtn: { fontSize: 11, letterSpacing: 1 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 80 },
@@ -476,12 +490,12 @@ const makeStyles = (colors) => StyleSheet.create({
   cardNotes: { fontSize: 14, lineHeight: 21, marginTop: 10, fontStyle: 'italic' },
   deleteBtn: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   notesEdit: { marginTop: 10 },
-  notesInput: { borderWidth: 1.5, borderRadius: 10, padding: 12, fontSize: 14, minHeight: 60, textAlignVertical: 'top' },
-  notesSaveBtn: { marginTop: 8, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+  notesInput: { borderWidth: 1.5, borderRadius: 16, padding: 12, fontSize: 14, minHeight: 60, textAlignVertical: 'top' },
+  notesSaveBtn: { marginTop: 8, borderRadius: 20, paddingVertical: 10, alignItems: 'center' },
   notesSaveText: { fontWeight: '900', fontSize: 12, letterSpacing: 1 },
   // Stats
   heroRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginTop: 16 },
-  heroCard: { flex: 1, borderWidth: 1.5, borderRadius: 14, padding: 14, alignItems: 'center' },
+  heroCard: { flex: 1, borderWidth: 1.5, borderRadius: 18, padding: 14, alignItems: 'center' },
   heroNum: { fontSize: 28, fontWeight: '900' },
   heroLabel: { fontSize: 9, letterSpacing: 1.5, marginTop: 4 },
   streakBadge: {
@@ -531,13 +545,13 @@ const makeStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  editPhotoBtn: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 20 },
+  editPhotoBtn: { borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 20 },
   editPhotoBtnText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   editLabel: { fontSize: 10, letterSpacing: 1.5, alignSelf: 'flex-start', marginBottom: 6 },
-  editInput: { width: '100%', borderWidth: 1.5, borderRadius: 10, padding: 12, fontSize: 15, marginBottom: 20 },
+  editInput: { width: '100%', borderWidth: 1.5, borderRadius: 16, padding: 12, fontSize: 15, marginBottom: 20 },
   editActions: { flexDirection: 'row', gap: 12, width: '100%' },
-  editCancelBtn: { flex: 1, borderWidth: 1.5, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  editCancelBtn: { flex: 1, borderWidth: 1.5, borderRadius: 20, paddingVertical: 14, alignItems: 'center' },
   editCancelText: { fontSize: 11, letterSpacing: 1 },
-  editSaveBtn: { flex: 1, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  editSaveBtn: { flex: 1, borderRadius: 20, paddingVertical: 14, alignItems: 'center' },
   editSaveText: { fontWeight: '900', fontSize: 12, letterSpacing: 1 },
 });

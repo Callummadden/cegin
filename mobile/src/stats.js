@@ -19,7 +19,8 @@ async function isServerMode() {
   return mode === 'server';
 }
 
-export async function getStats() {
+export async function getStats(forceRefresh = false) {
+  if (forceRefresh) _cache = null;
   if (_cache) return _cache;
 
   // Try local cache first (instant)

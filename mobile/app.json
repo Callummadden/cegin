@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cegin",
     "slug": "cegin",
-    "version": "1.1.6",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -19,7 +19,7 @@
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "package": "kitchen.cegin.app",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": [
         "ACCESS_NETWORK_STATE",
         "INTERNET",
@@ -43,7 +43,8 @@
       "expo-web-browser",
       "expo-sqlite",
       "expo-secure-store",
-      "./plugins/withCleartextTraffic.js"
+      "./plugins/withCleartextTraffic.js",
+      "./plugins/materialYou.js"
     ]
   }
 }

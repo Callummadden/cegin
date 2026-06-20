@@ -39,6 +39,7 @@ import { MONO, useTheme } from '../theme';
 import BottomNav from '../components/BottomNav';
 import AiDisclaimer from '../components/AiDisclaimer';
 import { useAi } from '../aiContext';
+import { useResponsive } from '../utils/responsive';
 
 const SECTIONS = [
   { key: 'fridge', label: 'FRIDGE', icon: '🧊', desc: 'Snap the inside of your fridge' },
@@ -48,8 +49,9 @@ const SECTIONS = [
 
 export default function TerryVisionScreen({ route, navigation }) {
   const { colors } = useTheme();
+  const { s, fs } = useResponsive();
   const { noAI } = useAi();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
 
   const SCAN_KEY = 'terry_vision_scans';
@@ -589,119 +591,121 @@ export default function TerryVisionScreen({ route, navigation }) {
   );
 }
 
-const makeStyles = (colors) => StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
+
   root: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    gap: s(14),
+    paddingHorizontal: s(20),
+    paddingBottom: s(12),
   },
-  backBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
-  subtitle: { fontSize: 9, letterSpacing: 2, marginTop: 1 },
-  list: { paddingBottom: 100 },
+  backBtn: { width: s(38), height: s(38), borderRadius: s(20), borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: fs(18), fontWeight: '900', letterSpacing: 0.5 },
+  subtitle: { fontSize: fs(9), letterSpacing: 2, marginTop: s(1) },
+  list: { paddingBottom: s(100) },
 
   // Top card — Terry's suggestion
   topCard: {
-    marginHorizontal: 20,
-    marginBottom: 8,
-    borderRadius: 20,
+    marginHorizontal: s(20),
+    marginBottom: s(8),
+    borderRadius: s(20),
     borderWidth: 1.5,
-    padding: 18,
+    padding: s(18),
   },
-  topHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
-  topIcon: { fontSize: 28 },
-  topTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
-  topDesc: { fontSize: 10, letterSpacing: 0.3, marginTop: 2 },
-  allIngredientsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 12, marginBottom: 14 },
-  miniChip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
-  miniChipText: { fontSize: 10, fontWeight: '600' },
-  askBtn: { borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
-  askBtnText: { fontWeight: '900', fontSize: 13, letterSpacing: 1 },
-  suggestionsList: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', gap: 12 },
-  recipeCard: { borderWidth: 1.5, borderRadius: 16, padding: 14 },
-  recipeCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  recipeCardTitle: { fontSize: 16, fontWeight: '900', flex: 1 },
-  recipeCardSaved: { fontSize: 10, letterSpacing: 0.5, fontWeight: '700', marginLeft: 10 },
-  recipeCardDesc: { fontSize: 13, lineHeight: 19, marginBottom: 10 },
-  recipeCardIngredients: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 12 },
-  recipeCardFooter: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  saveBtn: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, marginTop: 10 },
-  saveBtnText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
-  tapHint: { fontSize: 10, letterSpacing: 0.5 },
+  topHeader: { flexDirection: 'row', alignItems: 'center', gap: s(12), marginBottom: s(4) },
+  topIcon: { fontSize: fs(28) },
+  topTitle: { fontSize: fs(13), fontWeight: '900', letterSpacing: 0.5 },
+  topDesc: { fontSize: fs(10), letterSpacing: 0.3, marginTop: s(2) },
+  allIngredientsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: s(5), marginTop: s(12), marginBottom: s(14) },
+  miniChip: { borderWidth: 1, borderRadius: s(10), paddingHorizontal: s(8), paddingVertical: s(3) },
+  miniChipText: { fontSize: fs(10), fontWeight: '600' },
+  askBtn: { borderRadius: s(16), paddingVertical: s(14), alignItems: 'center' },
+  askBtnText: { fontWeight: '900', fontSize: fs(13), letterSpacing: 1 },
+  suggestionsList: { marginTop: s(14), paddingTop: s(14), borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', gap: s(12) },
+  recipeCard: { borderWidth: 1.5, borderRadius: s(16), padding: s(14) },
+  recipeCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: s(6) },
+  recipeCardTitle: { fontSize: fs(16), fontWeight: '900', flex: 1 },
+  recipeCardSaved: { fontSize: fs(10), letterSpacing: 0.5, fontWeight: '700', marginLeft: s(10) },
+  recipeCardDesc: { fontSize: fs(13), lineHeight: fs(19), marginBottom: s(10) },
+  recipeCardIngredients: { flexDirection: 'row', flexWrap: 'wrap', gap: s(5), marginBottom: s(12) },
+  recipeCardFooter: { flexDirection: 'row', alignItems: 'center', gap: s(12) },
+  saveBtn: { borderWidth: 1.5, borderRadius: s(14), paddingHorizontal: s(16), paddingVertical: s(10), marginTop: s(10) },
+  saveBtnText: { fontSize: fs(12), fontWeight: '700', letterSpacing: 0.5 },
+  tapHint: { fontSize: fs(10), letterSpacing: 0.5 },
   // Preview modal
-  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 20 },
-  previewCard: { borderRadius: 24, borderWidth: 1.5, padding: 24 },
-  previewTitle: { fontSize: 22, fontWeight: '900', marginBottom: 10 },
-  previewDesc: { fontSize: 14, lineHeight: 21, marginBottom: 16 },
-  previewIngredients: { marginBottom: 16 },
-  previewLabel: { fontSize: 10, letterSpacing: 1.5, marginBottom: 8 },
-  previewChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  previewStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  previewStatChip: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
-  previewStatText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
-  previewSteps: { marginBottom: 16 },
-  previewStep: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  previewStepNum: { fontSize: 13, fontWeight: '900', width: 20, textAlign: 'right' },
-  previewStepText: { fontSize: 13, lineHeight: 19, flex: 1 },
-  previewActions: { flexDirection: 'row', gap: 12 },
-  previewCancel: { flex: 1, borderWidth: 1.5, borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
-  previewCancelText: { fontSize: 11, letterSpacing: 1 },
-  previewSave: { flex: 1, borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
-  previewSaveText: { fontWeight: '900', fontSize: 12, letterSpacing: 0.5 },
+  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: s(20) },
+  previewCard: { borderRadius: s(24), borderWidth: 1.5, padding: s(24) },
+  previewTitle: { fontSize: fs(22), fontWeight: '900', marginBottom: s(10) },
+  previewDesc: { fontSize: fs(14), lineHeight: fs(21), marginBottom: s(16) },
+  previewIngredients: { marginBottom: s(16) },
+  previewLabel: { fontSize: fs(10), letterSpacing: 1.5, marginBottom: s(8) },
+  previewChips: { flexDirection: 'row', flexWrap: 'wrap', gap: s(6) },
+  previewStats: { flexDirection: 'row', flexWrap: 'wrap', gap: s(8), marginBottom: s(16) },
+  previewStatChip: { borderWidth: 1.5, borderRadius: s(12), paddingHorizontal: s(10), paddingVertical: s(6) },
+  previewStatText: { fontSize: fs(11), fontWeight: '600', letterSpacing: 0.3 },
+  previewSteps: { marginBottom: s(16) },
+  previewStep: { flexDirection: 'row', gap: s(10), marginTop: s(8) },
+  previewStepNum: { fontSize: fs(13), fontWeight: '900', width: s(20), textAlign: 'right' },
+  previewStepText: { fontSize: fs(13), lineHeight: fs(19), flex: 1 },
+  previewActions: { flexDirection: 'row', gap: s(12) },
+  previewCancel: { flex: 1, borderWidth: 1.5, borderRadius: s(16), paddingVertical: s(14), alignItems: 'center' },
+  previewCancelText: { fontSize: fs(11), letterSpacing: 1 },
+  previewSave: { flex: 1, borderRadius: s(16), paddingVertical: s(14), alignItems: 'center' },
+  previewSaveText: { fontWeight: '900', fontSize: fs(12), letterSpacing: 0.5 },
 
   // Divider
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, marginVertical: 14 },
-  dividerLine: { flex: 1, height: 1 },
-  dividerLabel: { fontSize: 9, letterSpacing: 1.5 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: s(14), paddingHorizontal: s(20), marginVertical: s(14) },
+  dividerLine: { flex: 1, height: s(1) },
+  dividerLabel: { fontSize: fs(9), letterSpacing: 1.5 },
 
   // Section card
   section: {
-    marginHorizontal: 20,
-    marginBottom: 14,
-    borderRadius: 20,
+    marginHorizontal: s(20),
+    marginBottom: s(14),
+    borderRadius: s(20),
     borderWidth: 1.5,
-    padding: 18,
+    padding: s(18),
   },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
-  sectionIcon: { fontSize: 28 },
-  sectionLabel: { fontSize: 11, letterSpacing: 1.5, fontWeight: '700' },
-  sectionDesc: { fontSize: 12, marginTop: 2 },
-  countBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
-  countBadgeText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: s(12), marginBottom: s(14) },
+  sectionIcon: { fontSize: fs(28) },
+  sectionLabel: { fontSize: fs(11), letterSpacing: 1.5, fontWeight: '700' },
+  sectionDesc: { fontSize: fs(12), marginTop: s(2) },
+  countBadge: { borderRadius: s(10), paddingHorizontal: s(8), paddingVertical: s(3) },
+  countBadgeText: { color: '#fff', fontSize: fs(11), fontWeight: '900' },
 
   // Capture buttons
-  captureRow: { flexDirection: 'row', gap: 10 },
+  captureRow: { flexDirection: 'row', gap: s(10) },
   captureBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: s(8),
     borderWidth: 1.5,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: s(14),
+    paddingVertical: s(14),
   },
-  captureBtnIcon: { fontSize: 18 },
-  captureBtnLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  captureBtnIcon: { fontSize: fs(18) },
+  captureBtnLabel: { fontSize: fs(12), fontWeight: '700', letterSpacing: 0.5 },
 
   // Photo
-  photoWrap: { borderRadius: 14, overflow: 'hidden', position: 'relative' },
-  photo: { width: '100%', height: 160, borderRadius: 14 },
-  retakeBtn: { position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-  retakeBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  photoWrap: { borderRadius: s(14), overflow: 'hidden', position: 'relative' },
+  photo: { width: '100%', height: s(160), borderRadius: s(14) },
+  retakeBtn: { position: 'absolute', top: s(10), right: s(10), width: s(28), height: s(28), borderRadius: s(14), backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  retakeBtnText: { color: '#fff', fontSize: fs(14), fontWeight: '700' },
 
   // Loading
-  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
-  loadingText: { fontSize: 12, fontFamily: MONO },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: s(10), marginTop: s(12) },
+  loadingText: { fontSize: fs(12), fontFamily: MONO },
 
   // Error
-  errorText: { fontSize: 12, marginTop: 10 },
+  errorText: { fontSize: fs(12), marginTop: s(10) },
 
   // Ingredients
-  ingredientChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
-  ingredientChip: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
-  ingredientText: { fontSize: 12, fontWeight: '600' },
-});
+  ingredientChips: { flexDirection: 'row', flexWrap: 'wrap', gap: s(6), marginTop: s(12) },
+  ingredientChip: { borderWidth: 1.5, borderRadius: s(14), paddingHorizontal: s(10), paddingVertical: s(5) },
+  ingredientText: { fontSize: fs(12), fontWeight: '600' },
+
+  });

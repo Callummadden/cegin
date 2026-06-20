@@ -12,7 +12,8 @@ async function isServerMode() {
   return mode === 'server';
 }
 
-export async function getShoppingList() {
+export async function getShoppingList(forceRefresh = false) {
+  if (forceRefresh) _cache = null;
   if (_cache) return _cache;
 
   if (await isServerMode()) {

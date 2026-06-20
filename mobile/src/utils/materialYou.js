@@ -40,7 +40,7 @@ export function generateMaterialYouPalette(seedHex) {
 export async function getDeviceAccentColor() {
   if (Platform.OS !== 'android') return null;
   try {
-    const color = await NativeModules.WallpaperColor?.getAccentColor?.();
+    const color = await NativeModules.MaterialYouColor?.getAccentColor?.();
     if (color && color !== '#000000' && color !== '#FFFFFF') {
       return color;
     }

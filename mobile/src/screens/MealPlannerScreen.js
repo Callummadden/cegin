@@ -17,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { api } from '../api';
 import { MONO, useTheme } from '../theme';
+import { subscribe } from '../wsSync';
 import { getMealPlan, setMeal, clearMeal, getWeekStart, formatDate, MEALS, MEAL_META, getCachedPlan } from '../mealPlan';
 import { getCachedRecipesSync } from '../offlineCache';
 import { getDietaryProfiles } from '../dietProfiles';
@@ -25,6 +26,7 @@ import AppModal from '../components/AppModal';
 import { useToast } from '../components/Toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAi } from '../aiContext';
+import { useResponsive } from '../utils/responsive';
 
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -41,8 +43,9 @@ const MEAL_GOALS = [
 
 export default function MealPlannerScreen({ navigation }) {
   const { colors } = useTheme();
+  const { s, fs } = useResponsive();
   const { noAI } = useAi();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
 
 
@@ -72,10 +75,10 @@ export default function MealPlannerScreen({ navigation }) {
     return d;
   });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
     const [p, recs] = await Promise.all([
-      getMealPlan(),
-      api.listRecipes().catch(() => []),
+      getMealPlan(forceRefresh),
+      api.listRecipes(null, { forceRefresh }).catch(() => []),
     ]);
     setPlan(p);
     setRecipes(recs);
@@ -83,9 +86,15 @@ export default function MealPlannerScreen({ navigation }) {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  useEffect(() => {
+    const unsub1 = subscribe('meal_plan', () => load(true));
+    const unsub2 = subscribe('recipes', () => load(true));
+    return () => { unsub1(); unsub2(); };
+  }, [load]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -426,24 +435,25 @@ export default function MealPlannerScreen({ navigation }) {
   );
 }
 
-const makeStyles = (colors) => StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
+
   root: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingHorizontal: s(20),
+    paddingBottom: s(8),
   },
-  backBtn: { width: 38, height: 38, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
+  backBtn: { width: s(38), height: s(38), borderRadius: s(20), borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: fs(18), fontWeight: '900', letterSpacing: 0.5 },
   aiBtn: {
     borderWidth: 1.5,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderRadius: s(20),
+    paddingHorizontal: s(14),
+    paddingVertical: s(8),
   },
-  aiBtnText: { fontSize: 11, letterSpacing: 1, fontWeight: '700' },
+  aiBtnText: { fontSize: fs(11), letterSpacing: 1, fontWeight: '700' },
 
   // Goal picker
   goalOverlay: {
@@ -452,90 +462,90 @@ const makeStyles = (colors) => StyleSheet.create({
     justifyContent: 'flex-end',
   },
   goalSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: s(24),
+    borderTopRightRadius: s(24),
     borderWidth: 1.5,
     borderBottomWidth: 0,
-    padding: 20,
-    paddingBottom: 36,
+    padding: s(20),
+    paddingBottom: s(36),
   },
   goalHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: s(36),
+    height: s(4),
+    borderRadius: s(2),
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: s(16),
   },
   goalTitle: {
-    fontSize: 18,
+    fontSize: fs(18),
     fontWeight: '900',
     letterSpacing: 0.5,
     textAlign: 'center',
   },
   goalSub: {
-    fontSize: 11,
+    fontSize: fs(11),
     letterSpacing: 0.5,
     textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 20,
+    marginTop: s(6),
+    marginBottom: s(20),
   },
   goalGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: s(10),
   },
   goalCard: {
     width: '47.5%',
     borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: s(16),
+    padding: s(14),
   },
-  goalIcon: { fontSize: 24, marginBottom: 6 },
-  goalLabel: { fontSize: 14, fontWeight: '900', letterSpacing: -0.2 },
-  goalDesc: { fontSize: 10, marginTop: 4, letterSpacing: 0.3, lineHeight: 14 },
+  goalIcon: { fontSize: fs(24), marginBottom: s(6) },
+  goalLabel: { fontSize: fs(14), fontWeight: '900', letterSpacing: -0.2 },
+  goalDesc: { fontSize: fs(10), marginTop: s(4), letterSpacing: 0.3, lineHeight: fs(14) },
   weekNav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20,
-    paddingVertical: 8,
+    gap: s(20),
+    paddingVertical: s(8),
   },
-  weekArrowBtn: { padding: 4 },
-  weekArrow: { fontSize: 20, fontWeight: '700' },
-  weekLabel: { fontSize: 13, letterSpacing: 1 },
+  weekArrowBtn: { padding: s(4) },
+  weekArrow: { fontSize: fs(20), fontWeight: '700' },
+  weekLabel: { fontSize: fs(13), letterSpacing: 1 },
 
   // Day strip
-  dayStrip: { flexDirection: 'row', paddingHorizontal: 20, gap: 6, paddingVertical: 10, justifyContent: 'space-between' },
+  dayStrip: { flexDirection: 'row', paddingHorizontal: s(20), gap: s(6), paddingVertical: s(10), justifyContent: 'space-between' },
   dayChip: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingVertical: s(10),
+    borderRadius: s(14),
     borderWidth: 1.5,
     alignItems: 'center',
-    gap: 2,
+    gap: s(2),
   },
-  dayChipName: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5 },
-  dayChipDate: { fontSize: 18, fontWeight: '900' },
-  dayDot: { width: 5, height: 5, borderRadius: 3, marginTop: 2 },
+  dayChipName: { fontSize: fs(10), fontWeight: '600', letterSpacing: 0.5 },
+  dayChipDate: { fontSize: fs(18), fontWeight: '900' },
+  dayDot: { width: s(5), height: s(5), borderRadius: s(3), marginTop: s(2) },
 
   // Day label
   dayLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingHorizontal: s(20),
+    paddingVertical: s(8),
   },
-  dayLabel: { fontSize: 16, fontWeight: '900' },
-  dayStats: { fontSize: 11, letterSpacing: 0.5 },
+  dayLabel: { fontSize: fs(16), fontWeight: '900' },
+  dayStats: { fontSize: fs(11), letterSpacing: 0.5 },
 
   // Meal cards
-  mealList: { paddingHorizontal: 20, paddingBottom: 100, gap: 10 },
+  mealList: { paddingHorizontal: s(20), paddingBottom: s(100), gap: s(10) },
   mealCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: s(14),
     borderWidth: 1.5,
     overflow: 'hidden',
   },
@@ -543,50 +553,51 @@ const makeStyles = (colors) => StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    gap: 12,
+    padding: s(14),
+    gap: s(12),
   },
-  mealCardAccent: { width: 4, height: '100%', borderRadius: 2, position: 'absolute', left: 0, top: 0, bottom: 0 },
-  mealCardLeft: { width: 40, alignItems: 'center' },
-  mealCardIcon: { fontSize: 28 },
+  mealCardAccent: { width: s(4), height: '100%', borderRadius: s(2), position: 'absolute', left: 0, top: 0, bottom: 0 },
+  mealCardLeft: { width: s(40), alignItems: 'center' },
+  mealCardIcon: { fontSize: fs(28) },
   mealCardBody: { flex: 1 },
-  mealCardLabel: { fontSize: 10, letterSpacing: 1.5, marginBottom: 2 },
-  mealCardTitle: { fontSize: 16, fontWeight: '900', lineHeight: 20 },
-  mealCardMeta: { fontSize: 12, marginTop: 4 },
-  mealCardClear: { padding: 14 },
+  mealCardLabel: { fontSize: fs(10), letterSpacing: 1.5, marginBottom: s(2) },
+  mealCardTitle: { fontSize: fs(16), fontWeight: '900', lineHeight: fs(20) },
+  mealCardMeta: { fontSize: fs(12), marginTop: s(4) },
+  mealCardClear: { padding: s(14) },
 
   // Empty meal card
   mealCardEmpty: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    borderRadius: 14,
+    gap: s(14),
+    borderRadius: s(14),
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    padding: 16,
+    padding: s(16),
   },
-  mealCardEmptyIcon: { fontSize: 28 },
-  mealCardEmptyLabel: { fontSize: 15, fontWeight: '900' },
-  mealCardEmptyHint: { fontSize: 12, marginTop: 2 },
-  mealCardAdd: { marginLeft: 'auto', fontSize: 24, fontWeight: '700' },
+  mealCardEmptyIcon: { fontSize: fs(28) },
+  mealCardEmptyLabel: { fontSize: fs(15), fontWeight: '900' },
+  mealCardEmptyHint: { fontSize: fs(12), marginTop: s(2) },
+  mealCardAdd: { marginLeft: 'auto', fontSize: fs(24), fontWeight: '700' },
 
   // Recipe picker
-  list: { padding: 20, paddingBottom: 100 },
+  list: { padding: s(20), paddingBottom: s(100) },
   pickCard: {
     flexDirection: 'row',
-    borderRadius: 14,
+    borderRadius: s(14),
     overflow: 'hidden',
     borderWidth: 1.5,
-    marginBottom: 10,
+    marginBottom: s(10),
   },
-  pickImg: { width: 80, height: 80 },
-  pickImgPlaceholder: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
-  pickInfo: { flex: 1, padding: 12, justifyContent: 'center' },
-  pickTitle: { fontSize: 15, fontWeight: '700' },
-  pickMeta: { fontSize: 11, marginTop: 4 },
-  emptyPick: { alignItems: 'center', paddingTop: 60 },
-  emptyState: { alignItems: 'center', paddingTop: 40, paddingBottom: 20 },
-  emptyEmoji: { fontSize: 56, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
-  emptyHint: { fontSize: 11, marginTop: 8 },
-});
+  pickImg: { width: s(80), height: s(80) },
+  pickImgPlaceholder: { width: s(80), height: s(80), alignItems: 'center', justifyContent: 'center' },
+  pickInfo: { flex: 1, padding: s(12), justifyContent: 'center' },
+  pickTitle: { fontSize: fs(15), fontWeight: '700' },
+  pickMeta: { fontSize: fs(11), marginTop: s(4) },
+  emptyPick: { alignItems: 'center', paddingTop: s(60) },
+  emptyState: { alignItems: 'center', paddingTop: s(40), paddingBottom: s(20) },
+  emptyEmoji: { fontSize: fs(56), marginBottom: s(16) },
+  emptyTitle: { fontSize: fs(18), fontWeight: '900', letterSpacing: 0.5 },
+  emptyHint: { fontSize: fs(11), marginTop: s(8) },
+
+  });

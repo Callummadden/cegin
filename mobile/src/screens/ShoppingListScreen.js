@@ -20,17 +20,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { api } from '../api';
 import { MONO, useTheme } from '../theme';
+import { subscribe } from '../wsSync';
 import { getShoppingList, addItems, addItemsGrouped, toggleItem, deleteItem, removeChecked, clearList } from '../shoppingList';
 import BottomNav from '../components/BottomNav';
 import AppModal from '../components/AppModal';
 import { useToast } from '../components/Toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAi } from '../aiContext';
+import { useResponsive } from '../utils/responsive';
 
 
 const DELETE_WIDTH = 80;
 
 const swipeStyles = StyleSheet.create({
+
   outer: { position: 'relative', overflow: 'hidden' },
   deleteBg: {
     position: 'absolute', top: 0, right: 0, bottom: 0,
@@ -38,16 +41,17 @@ const swipeStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#E5645B',
-    borderRadius: 10,
+    borderRadius: 20,
     zIndex: 0,
   },
   deleteBtn: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 20,
   },
   deleteText: { color: '#fff', fontWeight: '700', fontSize: 11 },
-});
+
+  });
 
 function SwipeableRow({ onDelete, children, colors }) {
   const translateX = useRef(new Animated.Value(0)).current;
@@ -108,8 +112,9 @@ function SwipeableRow({ onDelete, children, colors }) {
 
 export default function ShoppingListScreen({ navigation }) {
   const { colors } = useTheme();
+  const { s, fs } = useResponsive();
   const { noAI } = useAi();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
 
@@ -261,17 +266,22 @@ export default function ShoppingListScreen({ navigation }) {
 
   const CATEGORIES = ['DAIRY & EGGS', 'MEAT & FISH', 'FRUIT & VEG', 'PANTRY', 'HERBS & SPICES', 'SAUCES & CONDIMENTS', 'FROZEN', 'DRY GOODS & SNACKS'];
 
-  const load = useCallback(async () => {
-    const list = await getShoppingList();
+  const load = useCallback(async (forceRefresh = false) => {
+    const list = await getShoppingList(forceRefresh);
     setItems(list);
     loadMyItems();
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  useEffect(() => {
+    const unsub = subscribe('shopping_list', () => load(true));
+    return unsub;
+  }, [load]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -391,32 +401,36 @@ export default function ShoppingListScreen({ navigation }) {
       : recipes;
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: 20 + insets.top, paddingBottom: 14 }]}>
-          <Pressable style={[styles.backBtn, { borderColor: colors.border }]} onPress={() => { setPickingRecipes(false); setPickSearch(''); }}>
-            <Text style={{ fontSize: 17, color: colors.text }}>←</Text>
-          </Pressable>
-          <Text style={[styles.title, { color: colors.text }]}>PICK RECIPES</Text>
-        </View>
-        <View style={[styles.searchBar, { borderColor: colors.border, backgroundColor: colors.surface, marginTop: 4, marginHorizontal: 20, marginBottom: 14 }]}>
-          <Text style={{ color: colors.textMuted, fontSize: 14, marginRight: 6 }}>🔍</Text>
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search recipes..."
-            placeholderTextColor={colors.textMuted}
-            value={pickSearch}
-            onChangeText={setPickSearch}
-            autoCorrect={false}
-          />
-          {pickSearch.length > 0 && (
-            <Pressable onPress={() => setPickSearch('')} hitSlop={8}>
-              <Text style={{ color: colors.textMuted, fontSize: 14 }}>✕</Text>
-            </Pressable>
-          )}
+        <View style={[styles.floatingTop, { paddingTop: 20 + insets.top }]}>
+          <View style={[styles.topNav, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Pressable style={[styles.backBtn, { borderColor: colors.border }]} onPress={() => { setPickingRecipes(false); setPickSearch(''); }}>
+                <Text style={{ fontSize: 17, color: colors.text }}>←</Text>
+              </Pressable>
+              <Text style={[styles.title, { color: colors.text }]}>PICK RECIPES</Text>
+            </View>
+            <View style={[styles.searchBar, { borderColor: colors.border, backgroundColor: colors.surface, marginHorizontal: 0, marginTop: 8, marginBottom: 0 }]}>
+              <Text style={{ color: colors.textMuted, fontSize: 14, marginRight: 6 }}>🔍</Text>
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder="Search recipes..."
+                placeholderTextColor={colors.textMuted}
+                value={pickSearch}
+                onChangeText={setPickSearch}
+                autoCorrect={false}
+              />
+              {pickSearch.length > 0 && (
+                <Pressable onPress={() => setPickSearch('')} hitSlop={8}>
+                  <Text style={{ color: colors.textMuted, fontSize: 14 }}>✕</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
         </View>
         <FlatList
           data={filteredRecipes}
           keyExtractor={(r) => String(r.id)}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={styles.pickList}
           initialNumToRender={10}
           maxToRenderPerBatch={10}
           windowSize={5}
@@ -464,41 +478,41 @@ export default function ShoppingListScreen({ navigation }) {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: 20 + insets.top }]}>
-        <Text style={[styles.title, { color: colors.text }]}>SHOPPING LIST</Text>
-        {!noAI && (
-        <Pressable onPress={startSmartList} style={[styles.smartBtn, { borderColor: colors.primary }]}>
-          <Text style={[styles.smartBtnText, { fontFamily: MONO, color: colors.primary }]}>FROM RECIPES</Text>
-        </Pressable>
-        )}
-      </View>
-
-      {/* Add input */}
-      <View style={[styles.addRow, { borderColor: colors.border }]}>
-        <TextInput
-          style={[styles.addInput, { fontFamily: MONO, color: colors.text }]}
-          value={input}
-          onChangeText={setInput}
-          placeholder="+ add items (one per line)"
-          placeholderTextColor={colors.textMuted}
-          onSubmitEditing={handleAdd}
-          returnKeyType="done"
-          multiline
-        />
-        <Pressable style={[styles.addBtn, { backgroundColor: colors.primary }]} onPress={handleAdd}>
-          <Text style={[styles.addBtnText, { color: colors.onPrimary }]}>+</Text>
-        </Pressable>
-      </View>
-
-      {/* Quick add button */}
-      <View style={styles.quickBar}>
-        <Pressable
-          style={[styles.quickMenuBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          onPress={() => setQuickMenuOpen(true)}
-        >
-          <Text style={[styles.quickMenuBtnText, { fontFamily: MONO, color: colors.text2 }]}>⚡ QUICK ADD</Text>
-        </Pressable>
+      {/* Floating top nav */}
+      <View style={[styles.floatingTop, { paddingTop: 20 + insets.top }]}>
+        <View style={[styles.topNav, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.title, { color: colors.text }]}>SHOPPING LIST</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {!noAI && (
+                <Pressable onPress={startSmartList} style={[styles.smartBtn, { borderColor: colors.primary }]}>
+                  <Text style={[styles.smartBtnText, { fontFamily: MONO, color: colors.primary }]}>AUTO</Text>
+                </Pressable>
+              )}
+              <Pressable
+                style={[styles.quickMenuBtn, { borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 8 }]}
+                onPress={() => setQuickMenuOpen(true)}
+              >
+                <Text style={[styles.quickMenuBtnText, { fontFamily: MONO, color: colors.text2 }]}>⚡</Text>
+              </Pressable>
+            </View>
+          </View>
+          <View style={[styles.addRow, { borderColor: colors.border, marginHorizontal: 0, marginTop: 8 }]}>
+            <TextInput
+              style={[styles.addInput, { fontFamily: MONO, color: colors.text }]}
+              value={input}
+              onChangeText={setInput}
+              placeholder="+ add items (one per line)"
+              placeholderTextColor={colors.textMuted}
+              onSubmitEditing={handleAdd}
+              returnKeyType="done"
+              multiline
+            />
+            <Pressable style={[styles.addBtn, { backgroundColor: colors.primary }]} onPress={handleAdd}>
+              <Text style={[styles.addBtnText, { color: colors.onPrimary }]}>+</Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
 
       {/* List */}
@@ -819,8 +833,24 @@ export default function ShoppingListScreen({ navigation }) {
   );
 }
 
-const makeStyles = (colors) => StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
   root: { flex: 1 },
+  floatingTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  topNav: {
+    borderWidth: 1.5,
+    borderRadius: 28,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginHorizontal: 32,
+    marginTop: -20,
+    gap: 8,
+  },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 },
   title: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
   smartBtn: {
@@ -830,7 +860,7 @@ const makeStyles = (colors) => StyleSheet.create({
     paddingVertical: 8,
   },
   smartBtnText: { fontSize: 11, letterSpacing: 1, fontWeight: '700' },
-  backBtn: { width: 38, height: 38, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 38, height: 38, borderRadius: 20, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -838,7 +868,7 @@ const makeStyles = (colors) => StyleSheet.create({
     marginBottom: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1.5,
   },
   searchInput: {
@@ -851,7 +881,7 @@ const makeStyles = (colors) => StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 16,
     borderWidth: 1.5,
-    borderRadius: 10,
+    borderRadius: 16,
     alignItems: 'center',
     paddingRight: 6,
   },
@@ -859,7 +889,7 @@ const makeStyles = (colors) => StyleSheet.create({
   addBtn: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   addBtnText: { fontSize: 20, fontWeight: '700' },
   quickBar: { paddingHorizontal: 20, marginTop: 10 },
-  quickMenuBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  quickMenuBtn: { borderWidth: 1.5, borderRadius: 20, paddingVertical: 8, alignItems: 'center' },
   quickMenuBtnText: { fontSize: 12, letterSpacing: 1, fontWeight: '700' },
   quickMenuOverlay: { flex: 1 },
   quickMenuBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
@@ -900,7 +930,8 @@ const makeStyles = (colors) => StyleSheet.create({
   quickMenuChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   quickMenuChip: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   quickMenuChipText: { fontSize: 13, fontWeight: '500' },
-  list: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 100 },
+  list: { paddingHorizontal: 20, paddingTop: 175, paddingBottom: 100 },
+  pickList: { paddingHorizontal: 20, paddingTop: 190, paddingBottom: 100 },
   catHeader: { fontSize: 11, letterSpacing: 1.5, marginTop: 16, marginBottom: 6 },
   empty: { alignItems: 'center', paddingTop: 60 },
   emptyState: { alignItems: 'center', paddingTop: 60, paddingBottom: 40 },

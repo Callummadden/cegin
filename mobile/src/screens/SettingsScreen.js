@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -20,6 +20,8 @@ import { clearCache as clearCookbookCache } from '../cookbook';
 import { clearCache as clearShoppingListCache } from '../shoppingList';
 import { clearCache as clearStatsCache } from '../stats';
 import { clearCache as clearDietProfilesCache } from '../dietProfiles';
+import { useResponsive } from '../utils/responsive';
+import { disconnect as wsDisconnect, connect as wsConnect } from '../wsSync';
 import { MONO, useTheme, THEME_LIST, OLED_ACCENTS } from '../theme';
 import Constants from 'expo-constants';
 import { checkVersions, getVersionStatus, CLIENT_VERSION } from '../versionCheck';
@@ -133,7 +135,7 @@ const peStyles = StyleSheet.create({
 });
 
 // ─── Reusable toggle row ──────────────────────────────────────────────────
-function ToggleRow({ colors, label, hint, value, onToggle }) {
+function ToggleRow({ colors, label, hint, value, onToggle, styles }) {
   return (
     <Pressable style={styles.toggleRow} onPress={onToggle}>
       <View style={{ flex: 1 }}>
@@ -159,6 +161,8 @@ function ToggleRow({ colors, label, hint, value, onToggle }) {
 export default function SettingsScreen({ navigation }) {
   const { colors, mode, scheme, setMode, palette, setPalette, oledAccent, setOledAccent, materialYouSeed, setMaterialYouSeed } = useTheme();
   const { noAI, setNoAI } = useAi();
+  const { s, fs } = useResponsive();
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
   const [url, setUrl] = useState('');
   const [savedServers, setSavedServers] = useState([]);
@@ -326,6 +330,8 @@ export default function SettingsScreen({ navigation }) {
       clearDietProfilesCache();
 
       await setServerUrl(serverUrl);
+      wsDisconnect();
+      wsConnect();
       await api.health();
       const ai = await api.aiStatus().catch(() => null);
       setAiStatus(ai);
@@ -666,6 +672,7 @@ export default function SettingsScreen({ navigation }) {
               hint="Hides all AI features — Terry, vision, smart lists, meal planning, and more."
               value={noAI}
               onToggle={() => setNoAI(!noAI)}
+              styles={styles}
             />
           </View>
         </View>
@@ -753,6 +760,7 @@ export default function SettingsScreen({ navigation }) {
                   setMorningDigest(next);
                   await api.updateNotificationSettings({ morning_digest: next });
                 }}
+                styles={styles}
               />
             )}
 
@@ -768,6 +776,7 @@ export default function SettingsScreen({ navigation }) {
                   setPerishableAlerts(next);
                   await api.updateNotificationSettings({ perishable_alerts: next });
                 }}
+                styles={styles}
               />
             )}
           </View>
@@ -1267,114 +1276,116 @@ export default function SettingsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
+
   root: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingBottom: 0 },
-  backBtn: { width: 38, height: 38, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  screenTitle: { fontSize: 19, fontWeight: '900', letterSpacing: 0.5 },
-  section: { paddingHorizontal: 20, paddingTop: 24 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  sectionIcon: { fontSize: 14 },
-  sectionLabel: { fontSize: 10, letterSpacing: 1, marginBottom: 0 },
-  sectionToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-  subLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: 8 },
-  segment: { flexDirection: 'row', borderWidth: 1.5, borderRadius: 12, padding: 4, gap: 4 },
-  segmentItem: { flex: 1, paddingVertical: 12, borderRadius: 9, alignItems: 'center' },
-  segmentText: { fontSize: 11, letterSpacing: 1 },
-  themeScroll: { gap: 10, paddingVertical: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: s(14), paddingHorizontal: s(20), paddingBottom: 0 },
+  backBtn: { width: s(38), height: s(38), borderRadius: s(20), borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  screenTitle: { fontSize: fs(19), fontWeight: '900', letterSpacing: 0.5 },
+  section: { paddingHorizontal: s(20), paddingTop: s(24) },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: s(8), marginBottom: s(10) },
+  sectionIcon: { fontSize: fs(14) },
+  sectionLabel: { fontSize: fs(10), letterSpacing: 1, marginBottom: 0 },
+  sectionToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: s(4) },
+  subLabel: { fontSize: fs(12), fontWeight: '700', letterSpacing: 0.5, marginBottom: s(8) },
+  segment: { flexDirection: 'row', borderWidth: 1.5, borderRadius: s(18), padding: s(4), gap: s(4) },
+  segmentItem: { flex: 1, paddingVertical: s(12), borderRadius: s(9), alignItems: 'center' },
+  segmentText: { fontSize: fs(11), letterSpacing: 1 },
+  themeScroll: { gap: s(10), paddingVertical: s(4) },
   themeCard: {
-    width: 120,
+    width: s(120),
     borderWidth: 1.5,
-    borderRadius: 14,
-    padding: 8,
+    borderRadius: s(18),
+    padding: s(8),
     alignItems: 'center',
-    gap: 8,
+    gap: s(8),
     position: 'relative',
   },
   themePreview: {
     width: '100%',
-    height: 70,
-    borderRadius: 8,
+    height: s(70),
+    borderRadius: s(8),
     overflow: 'hidden',
   },
-  previewBar: { height: 16, paddingHorizontal: 6, justifyContent: 'center', borderBottomWidth: 1 },
-  previewContent: { flex: 1, padding: 6, gap: 4, justifyContent: 'center', alignItems: 'center' },
-  previewLine: { height: 4, borderRadius: 2 },
-  previewDot: { width: 10, height: 10, borderRadius: 5 },
-  themeName: { fontSize: 10, letterSpacing: 0.5 },
-  themeCheck: { position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  oledSection: { marginTop: 14 },
-  oledGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  oledDot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 3 },
-  input: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 14 },
-  hint: { fontSize: 12, lineHeight: 19, marginTop: 8 },
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-  toggleLabel: { fontSize: 13, fontWeight: '600' },
-  divider: { height: 1, marginVertical: 12 },
-  testBtn: { marginTop: 12, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  testBtnText: { fontSize: 12, letterSpacing: 1 },
-  statusText: { marginTop: 10, fontSize: 12, letterSpacing: 1, textAlign: 'center' },
+  previewBar: { height: s(16), paddingHorizontal: s(6), justifyContent: 'center', borderBottomWidth: 1 },
+  previewContent: { flex: 1, padding: s(6), gap: s(4), justifyContent: 'center', alignItems: 'center' },
+  previewLine: { height: s(4), borderRadius: s(2) },
+  previewDot: { width: s(10), height: s(10), borderRadius: s(5) },
+  themeName: { fontSize: fs(10), letterSpacing: 0.5 },
+  themeCheck: { position: 'absolute', top: s(6), right: s(6), width: s(18), height: s(18), borderRadius: s(9), alignItems: 'center', justifyContent: 'center' },
+  oledSection: { marginTop: s(14) },
+  oledGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: s(10) },
+  oledDot: { width: s(36), height: s(36), borderRadius: s(18), alignItems: 'center', justifyContent: 'center', borderWidth: 3 },
+  input: { borderWidth: 1.5, borderRadius: s(16), paddingHorizontal: s(14), paddingVertical: s(14) },
+  hint: { fontSize: fs(12), lineHeight: fs(19), marginTop: s(8) },
+  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: s(4) },
+  toggleLabel: { fontSize: fs(13), fontWeight: '600' },
+  divider: { height: s(1), marginVertical: s(12) },
+  testBtn: { marginTop: s(12), borderRadius: s(20), paddingVertical: s(14), alignItems: 'center' },
+  testBtnText: { fontSize: fs(12), letterSpacing: 1 },
+  statusText: { marginTop: s(10), fontSize: fs(12), letterSpacing: 1, textAlign: 'center' },
   disabled: { opacity: 0.6 },
-  infoCard: { borderWidth: 1.5, borderRadius: 12, padding: 16 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  infoLabel: { fontSize: 13 },
-  infoValue: { fontSize: 13, fontWeight: '600' },
-  dangerBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8 },
-  dangerBtnText: { fontSize: 14, fontWeight: '500' },
+  infoCard: { borderWidth: 1.5, borderRadius: s(18), padding: s(16) },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: s(6) },
+  infoLabel: { fontSize: fs(13) },
+  infoValue: { fontSize: fs(13), fontWeight: '600' },
+  dangerBtn: { borderWidth: 1.5, borderRadius: s(20), paddingVertical: s(14), paddingHorizontal: s(16), marginBottom: s(8) },
+  dangerBtnText: { fontSize: fs(14), fontWeight: '500' },
   // Collapsible sections
-  collapseCard: { borderWidth: 1.5, borderRadius: 12, padding: 14 },
+  collapseCard: { borderWidth: 1.5, borderRadius: s(18), padding: s(14) },
   collapseRow: { flexDirection: 'row', alignItems: 'center' },
-  collapseTitle: { fontSize: 13, fontWeight: '600' },
-  collapseHint: { fontSize: 11, marginTop: 2 },
-  collapseArrow: { fontSize: 11, marginLeft: 10 },
-  collapseContent: { borderWidth: 1.5, borderRadius: 12, marginTop: 8, overflow: 'hidden' },
-  dataRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1 },
-  dataRowText: { fontSize: 14, fontWeight: '500' },
-  dataRowArrow: { fontSize: 18, fontWeight: '300' },
+  collapseTitle: { fontSize: fs(13), fontWeight: '600' },
+  collapseHint: { fontSize: fs(11), marginTop: s(2) },
+  collapseArrow: { fontSize: fs(11), marginLeft: s(10) },
+  collapseContent: { borderWidth: 1.5, borderRadius: s(18), marginTop: s(8), overflow: 'hidden' },
+  dataRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: s(14), paddingHorizontal: s(16), borderBottomWidth: 1 },
+  dataRowText: { fontSize: fs(14), fontWeight: '500' },
+  dataRowArrow: { fontSize: fs(18), fontWeight: '300' },
   // About card
-  aboutCard: { borderWidth: 1.5, borderRadius: 14, overflow: 'hidden' },
-  aboutRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  aboutName: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
-  aboutTagline: { fontSize: 13, lineHeight: 20, marginTop: 4 },
-  versionBadge: { borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  versionText: { fontSize: 11, letterSpacing: 1, fontWeight: '700' },
-  aboutMeta: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 10 },
-  aboutMetaText: { fontSize: 12, letterSpacing: 0.5 },
+  aboutCard: { borderWidth: 1.5, borderRadius: s(20), overflow: 'hidden' },
+  aboutRow: { flexDirection: 'row', alignItems: 'center', padding: s(16) },
+  aboutName: { fontSize: fs(24), fontWeight: '900', letterSpacing: -0.5 },
+  aboutTagline: { fontSize: fs(13), lineHeight: fs(20), marginTop: s(4) },
+  versionBadge: { borderWidth: 1.5, borderRadius: s(12), paddingHorizontal: s(10), paddingVertical: s(4) },
+  versionText: { fontSize: fs(11), letterSpacing: 1, fontWeight: '700' },
+  aboutMeta: { borderTopWidth: 1, paddingHorizontal: s(16), paddingVertical: s(10) },
+  aboutMetaText: { fontSize: fs(12), letterSpacing: 0.5 },
   // Profile
-  profileCard: { borderWidth: 1.5, borderRadius: 12, padding: 14, marginBottom: 8 },
+  profileCard: { borderWidth: 1.5, borderRadius: s(18), padding: s(14), marginBottom: s(8) },
   profileHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  profileName: { fontSize: 15, fontWeight: '900' },
-  profileNeeds: { fontSize: 12, letterSpacing: 0.5, marginTop: 4 },
-  profileNotes: { fontSize: 12, lineHeight: 18, marginTop: 4 },
-  addProfileBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
-  addProfileText: { fontSize: 11, letterSpacing: 1 },
+  profileName: { fontSize: fs(15), fontWeight: '900' },
+  profileNeeds: { fontSize: fs(12), letterSpacing: 0.5, marginTop: s(4) },
+  profileNotes: { fontSize: fs(12), lineHeight: fs(18), marginTop: s(4) },
+  addProfileBtn: { borderWidth: 1.5, borderRadius: s(20), paddingVertical: s(12), alignItems: 'center', marginTop: s(4) },
+  addProfileText: { fontSize: fs(11), letterSpacing: 1 },
   // Permissions
-  permBadge: { borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5 },
-  permBadgeText: { fontSize: 11, letterSpacing: 1, fontWeight: '900' },
-  permBtn: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
-  permBtnText: { fontSize: 11, letterSpacing: 1, fontWeight: '900' },
+  permBadge: { borderWidth: 1.5, borderRadius: s(12), paddingHorizontal: s(12), paddingVertical: s(5) },
+  permBadgeText: { fontSize: fs(11), letterSpacing: 1, fontWeight: '900' },
+  permBtn: { borderRadius: s(20), paddingHorizontal: s(14), paddingVertical: s(8) },
+  permBtnText: { fontSize: fs(11), letterSpacing: 1, fontWeight: '900' },
   // Model picker
-  modelChangeBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  modelChangeText: { fontSize: 11, letterSpacing: 1, fontWeight: '700' },
-  modelPicker: { borderWidth: 1.5, borderRadius: 14, marginTop: 10, overflow: 'hidden' },
-  modelPickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, paddingBottom: 8 },
-  modelItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1 },
-  modelItemText: { fontSize: 13, flex: 1, marginRight: 8 },
+  modelChangeBtn: { borderWidth: 1.5, borderRadius: s(20), paddingVertical: s(10), alignItems: 'center' },
+  modelChangeText: { fontSize: fs(11), letterSpacing: 1, fontWeight: '700' },
+  modelPicker: { borderWidth: 1.5, borderRadius: s(18), marginTop: s(10), overflow: 'hidden' },
+  modelPickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: s(14), paddingBottom: s(8) },
+  modelItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: s(12), paddingHorizontal: s(14), borderBottomWidth: 1 },
+  modelItemText: { fontSize: fs(13), flex: 1, marginRight: s(8) },
   // Terry's Crib
-  terryCard: { borderWidth: 1.5, borderRadius: 16, overflow: 'hidden' },
-  terryPhoto: { width: '100%', height: 300 },
-  terryInfo: { padding: 16, paddingBottom: 0 },
-  terryName: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
-  terryTitle: { fontSize: 10, letterSpacing: 1, marginTop: 4 },
-  terryStats: { flexDirection: 'row', padding: 16, borderTopWidth: 1, gap: 12 },
+  terryCard: { borderWidth: 1.5, borderRadius: s(20), overflow: 'hidden' },
+  terryPhoto: { width: '100%', height: s(300) },
+  terryInfo: { padding: s(16), paddingBottom: 0 },
+  terryName: { fontSize: fs(22), fontWeight: '900', letterSpacing: -0.5 },
+  terryTitle: { fontSize: fs(10), letterSpacing: 1, marginTop: s(4) },
+  terryStats: { flexDirection: 'row', padding: s(16), borderTopWidth: 1, gap: s(12) },
   terryStat: { flex: 1, alignItems: 'center' },
-  terryStatNum: { fontSize: 28, fontWeight: '900' },
-  terryStatLabel: { fontSize: 9, letterSpacing: 1, marginTop: 2, textAlign: 'center' },
-  terryDiary: { padding: 16, borderTopWidth: 1 },
-  terryDiaryLabel: { fontSize: 10, letterSpacing: 1, marginBottom: 10 },
-  terryDiaryText: { fontSize: 13, lineHeight: 22, fontStyle: 'italic' },
-  terryReviews: { padding: 16, borderTopWidth: 1, gap: 10 },
-  terryReview: { fontSize: 13, lineHeight: 20, fontStyle: 'italic' },
-  terryClose: { margin: 16, borderWidth: 1.5, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  terryCloseText: { fontSize: 10, letterSpacing: 1 },
+  terryStatNum: { fontSize: fs(28), fontWeight: '900' },
+  terryStatLabel: { fontSize: fs(9), letterSpacing: 1, marginTop: s(2), textAlign: 'center' },
+  terryDiary: { padding: s(16), borderTopWidth: 1 },
+  terryDiaryLabel: { fontSize: fs(10), letterSpacing: 1, marginBottom: s(10) },
+  terryDiaryText: { fontSize: fs(13), lineHeight: fs(22), fontStyle: 'italic' },
+  terryReviews: { padding: s(16), borderTopWidth: 1, gap: s(10) },
+  terryReview: { fontSize: fs(13), lineHeight: fs(20), fontStyle: 'italic' },
+  terryClose: { margin: s(16), borderWidth: 1.5, borderRadius: s(20), paddingVertical: s(12), alignItems: 'center' },
+  terryCloseText: { fontSize: fs(10), letterSpacing: 1 },
+
 });

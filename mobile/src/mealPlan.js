@@ -12,7 +12,8 @@ async function isServerMode() {
   return mode === 'server';
 }
 
-export async function getMealPlan() {
+export async function getMealPlan(forceRefresh = false) {
+  if (forceRefresh) _cache = null;
   if (_cache) return _cache;
 
   if (await isServerMode()) {

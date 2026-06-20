@@ -15,12 +15,17 @@ import AppModal from '../components/AppModal';
 import AiDisclaimer from '../components/AiDisclaimer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAi } from '../aiContext';
+import { useResponsive } from '../utils/responsive';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 
 
 export default function EditRecipeScreen({ route, navigation }) {
   const { colors } = useTheme();
+  const { s, fs } = useResponsive();
   const { noAI } = useAi();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
 
 
@@ -159,44 +164,17 @@ export default function EditRecipeScreen({ route, navigation }) {
           <Text style={[styles.screenTitle, { color: colors.text }]}>
             {existing ? 'EDIT RECIPE' : 'NEW RECIPE'}
           </Text>
+          <Pressable
+            style={{ marginLeft: 'auto', padding: 4 }}
+            onPress={() => setModal({
+              title: 'How it works',
+              message: 'TITLE — Give your recipe a name.\n\nPHOTO — Take a photo or pick from gallery.\n\nPREP/COOK TIME — How long it takes (in minutes).\n\nSERVINGS — How many people it feeds.\n\nINGREDIENTS — One per line (e.g. "2 cups flour").\n\nINSTRUCTIONS — One step per line.\n\nTIMERS — Write times in your instructions (e.g. "Bake for 30 minutes" or "Simmer for 1 hour"). When you cook the recipe, these become tappable countdown timers with alerts.\n\nTAGS — Comma-separated (e.g. "dinner, quick, veggie").\n\nNOTES — Personal tweaks or reminders.',
+              buttons: [{ text: 'GOT IT', primary: true }],
+            })}
+          >
+            <Ionicons name="help-circle-outline" size={28} color={colors.textMuted} />
+          </Pressable>
         </View>
-
-        {/* Import section */}
-        {showImport && !noAI && (
-          <View style={styles.importSection}>
-            <Text style={[styles.fieldLabel, { fontFamily: MONO, color: colors.textMuted }]}>
-              IMPORT FROM A RECIPE URL
-            </Text>
-            <TextInput
-              style={[styles.input, { fontFamily: MONO, fontSize: 13, backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
-              value={importUrl}
-              onChangeText={setImportUrl}
-              placeholder="https://example.com/best-lasagna"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-            />
-            <Pressable
-              style={[styles.importBtn, { backgroundColor: colors.primary }, importing && styles.disabled]}
-              onPress={importFromUrl}
-              disabled={importing}
-            >
-              {importing ? (
-                <ActivityIndicator size="small" color={colors.onPrimary} />
-              ) : (
-                <Text style={[styles.importBtnText, { fontFamily: MONO, color: colors.onPrimary }]}>
-                  IMPORT & FILL IN
-                </Text>
-              )}
-            </Pressable>
-            {importError && <Text style={[styles.errorText, { color: colors.danger }]}>{importError}</Text>}
-            <Text style={[styles.hint, { color: colors.textMuted }]}>
-              Pulls the title, ingredients and steps from the page so you can review and save.
-            </Text>
-            <View style={[styles.divider, { borderColor: colors.border }]} />
-          </View>
-        )}
 
         {/* Form fields */}
         <View style={{ marginBottom: 16 }}>
@@ -221,21 +199,41 @@ export default function EditRecipeScreen({ route, navigation }) {
         </View>
 
         <View style={{ marginBottom: 16 }}>
-          <Text style={[styles.fieldLabel, { fontFamily: MONO, color: colors.textMuted }]}>IMAGE URL</Text>
-          <TextInput
-            style={[styles.input, { fontFamily: MONO, fontSize: 13, backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
-            value={imageUrl}
-            onChangeText={setImageUrl}
-            placeholder="https://example.com/photo.jpg"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            returnKeyType="next"
-          />
-          <Text style={[styles.hint, { color: colors.textMuted }]}>
-            Paste a direct link to a photo. Filled automatically when importing from a URL.
-          </Text>
+          <Text style={[styles.fieldLabel, { fontFamily: MONO, color: colors.textMuted }]}>PHOTO</Text>
+          {imageUrl ? (
+            <View style={{ marginBottom: 8 }}>
+              <Image source={{ uri: imageUrl }} style={{ width: '100%', height: 200, borderRadius: 16 }} contentFit="cover" />
+              <Pressable
+                style={[styles.importBtn, { backgroundColor: colors.danger, marginTop: 8 }]}
+                onPress={() => setImageUrl('')}
+              >
+                <Text style={[styles.importBtnText, { fontFamily: MONO, color: '#fff' }]}>REMOVE</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                style={[styles.importBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5, flex: 1 }]}
+                onPress={async () => {
+                  const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                  if (status !== 'granted') return;
+                  const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+                  if (!result.canceled && result.assets[0]) setImageUrl(result.assets[0].uri);
+                }}
+              >
+                <Text style={[styles.importBtnText, { fontFamily: MONO, color: colors.text }]}>CAMERA</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.importBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5, flex: 1 }]}
+                onPress={async () => {
+                  const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
+                  if (!result.canceled && result.assets[0]) setImageUrl(result.assets[0].uri);
+                }}
+              >
+                <Text style={[styles.importBtnText, { fontFamily: MONO, color: colors.text }]}>GALLERY</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         <View style={{ marginBottom: 16 }}>
@@ -346,7 +344,7 @@ export default function EditRecipeScreen({ route, navigation }) {
               {cleaning ? (
                 <ActivityIndicator size="small" color={colors.primary} />
               ) : (
-                <Text style={[styles.cleanBtnText, { color: colors.primary }]}>✨ CLEAN UP WITH AI</Text>
+                <Text style={[styles.cleanBtnText, { color: colors.primary }]}>✨ CLEAN UP WITH TERRY</Text>
               )}
             </Pressable>
             <Text style={[styles.hint, { color: colors.textMuted }]}>
@@ -373,54 +371,56 @@ export default function EditRecipeScreen({ route, navigation }) {
   );
 }
 
-const makeStyles = (colors) => StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
+
   root: { flex: 1 },
-  content: { padding: 20, paddingBottom: 48 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 0, marginBottom: 22 },
+  content: { padding: s(20), paddingBottom: s(48) },
+  header: { flexDirection: 'row', alignItems: 'center', gap: s(14), paddingHorizontal: 0, marginBottom: s(22) },
   backBtn: {
-    width: 38, height: 38, borderRadius: 10, borderWidth: 1.5,
+    width: s(38), height: s(38), borderRadius: s(20), borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  screenTitle: { fontSize: 19, fontWeight: '900', letterSpacing: 0.5 },
-  importSection: { marginBottom: 4 },
-  divider: { borderTopWidth: 1.5, borderStyle: 'dashed', marginVertical: 20 },
-  fieldWrap: { marginBottom: 16 },
-  fieldLabel: { fontSize: 10, letterSpacing: 1, marginBottom: 8 },
+  screenTitle: { fontSize: fs(19), fontWeight: '900', letterSpacing: 0.5 },
+  importSection: { marginBottom: s(4) },
+  divider: { borderTopWidth: 1.5, borderStyle: 'dashed', marginVertical: s(20) },
+  fieldWrap: { marginBottom: s(16) },
+  fieldLabel: { fontSize: fs(10), letterSpacing: 1, marginBottom: s(8) },
   input: {
     borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 14,
+    borderRadius: s(16),
+    paddingHorizontal: s(14),
+    paddingVertical: s(14),
+    fontSize: fs(14),
   },
-  multiline: { minHeight: 60, textAlignVertical: 'top' },
-  tall: { minHeight: 120, textAlignVertical: 'top' },
-  rowFields: { flexDirection: 'row', gap: 12 },
+  multiline: { minHeight: s(60), textAlignVertical: 'top' },
+  tall: { minHeight: s(120), textAlignVertical: 'top' },
+  rowFields: { flexDirection: 'row', gap: s(12) },
   importBtn: {
-    marginTop: 10,
-    borderRadius: 10,
-    paddingVertical: 15,
+    marginTop: s(10),
+    borderRadius: s(10),
+    paddingVertical: s(15),
     alignItems: 'center',
   },
-  importBtnText: { fontSize: 13, letterSpacing: 1 },
-  hint: { fontSize: 12.5, lineHeight: 19, marginTop: 8 },
-  errorText: { fontSize: 14, marginTop: 8 },
+  importBtnText: { fontSize: fs(13), letterSpacing: 1 },
+  hint: { fontSize: fs(12.5), lineHeight: fs(19), marginTop: s(8) },
+  errorText: { fontSize: fs(14), marginTop: s(8) },
   cleanBtn: {
-    marginTop: 28,
+    marginTop: s(28),
     borderWidth: 1.5,
-    borderRadius: 12,
-    paddingVertical: 13,
+    borderRadius: s(12),
+    paddingVertical: s(13),
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: s(48),
   },
-  cleanBtnText: { fontSize: 15, fontWeight: '700' },
+  cleanBtnText: { fontSize: fs(15), fontWeight: '700' },
   saveBtn: {
-    marginTop: 16,
-    borderRadius: 12,
-    paddingVertical: 17,
+    marginTop: s(16),
+    borderRadius: s(12),
+    paddingVertical: s(17),
     alignItems: 'center',
   },
-  saveBtnText: { fontSize: 15, fontWeight: '900', letterSpacing: 1 },
+  saveBtnText: { fontSize: fs(15), fontWeight: '900', letterSpacing: 1 },
   disabled: { opacity: 0.6 },
-});
+
+  });

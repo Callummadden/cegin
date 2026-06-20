@@ -25,6 +25,7 @@ import { api, getServerUrl } from '../api';
 import { getAppMode } from '../config';
 import { MONO, useTheme } from '../theme';
 import { isOnline as checkOnline, setOnline, getPendingChanges, syncPendingChanges, getCachedRecipesSync } from '../offlineCache';
+import { subscribe } from '../wsSync';
 import { getFavorites, toggleFavorite } from '../favorites';
 import { getStats } from '../stats';
 import BottomNav from '../components/BottomNav';
@@ -35,6 +36,7 @@ import { useToast } from '../components/Toast';
 import TutorialOverlay, { shouldShowTutorial } from '../components/TutorialOverlay';
 import VersionBanner from '../components/VersionBanner';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsive } from '../utils/responsive';
 
 const BASE_TABS = ['ALL', 'FAVES', 'QUICK'];
 const SEARCH_HISTORY_KEY = 'cegin_search_history';
@@ -71,7 +73,8 @@ function matchesTab(r, tab, favs, collections) {
 
 export default function RecipeListScreen({ navigation }) {
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { s, fs } = useResponsive();
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const cardBgs = useMemo(() => heroCardColors(colors), [colors]);
   const insets = useSafeAreaInsets();
 
@@ -84,7 +87,7 @@ export default function RecipeListScreen({ navigation }) {
   const [favs, setFavs] = useState({});
   const [menuRecipe, setMenuRecipe] = useState(null);
   const [sortBy, setSortBy] = useState('newest');
-  const [viewMode, setViewMode] = useState('cards');
+  const [viewMode, setViewMode] = useState('grid');
   const [collections, setCollections] = useState([]);
   const [recipeCollections, setRecipeCollections] = useState([]);
   const [selectedCollection, setSelectedCollection] = useState(null);
@@ -94,6 +97,7 @@ export default function RecipeListScreen({ navigation }) {
   const [cookCounts, setCookCounts] = useState({});
   const [searchHistory, setSearchHistory] = useState([]);
   const [searchFocused, setSearchFocused] = useState(false);
+  const clearingHistory = useRef(false);
   const { showToast } = useToast();
 
   // Tutorial
@@ -277,7 +281,7 @@ export default function RecipeListScreen({ navigation }) {
     },
   }), [changeTab]);
 
-  const load = useCallback(async (query) => {
+  const load = useCallback(async (query, forceRefresh = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -289,7 +293,7 @@ export default function RecipeListScreen({ navigation }) {
 
       // Show cached data instantly, update each as it arrives
       const [data, favorites] = await Promise.all([
-        api.listRecipes(query),
+        api.listRecipes(query, { forceRefresh }),
         getFavorites(),
       ]);
       setRecipes(data);
@@ -331,15 +335,17 @@ export default function RecipeListScreen({ navigation }) {
   }, []);
 
   const firstEffectRef = useRef(true);
-  useFocusEffect(useCallback(() => { load(search); }, [load, search]));
+  useFocusEffect(useCallback(() => { load(search); }, [load])); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const unsub1 = subscribe('recipes', () => load('', true));
+    const unsub2 = subscribe('collections', () => load('', true));
+    return () => { unsub1(); unsub2(); };
+  }, [load]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (firstEffectRef.current) { firstEffectRef.current = false; return; }
-    const t = setTimeout(() => {
-      load(search);
-      if (search.trim()) saveSearchHistory(search);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search, load, saveSearchHistory]);
+    // Client-side filtering handles search — no server fetch needed per keystroke
+  }, [search]);
 
   const q = search.toLowerCase();
   const SORTERS = {
@@ -434,7 +440,7 @@ export default function RecipeListScreen({ navigation }) {
           <View style={[styles.card, pressed && styles.cardPressed]}>
             {item.image_url ? (
               <View style={[styles.cardBg, { overflow: 'hidden' }]}>
-                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`recipe-${item.id}`} />
+                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`recipe-${item.id}`} transition={300} />
                 <View style={styles.cardDark} />
                 {/* Collection badges */}
                 {itemCollections.length > 0 && (
@@ -515,7 +521,7 @@ export default function RecipeListScreen({ navigation }) {
             <View style={[styles.listAccent, { backgroundColor: colors.primary }]} />
             <View style={[styles.listThumb, { backgroundColor: bg }]}>
               {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`list-${item.id}`} />
+                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`list-${item.id}`} transition={300} />
               ) : null}
               <View style={styles.cardDark} />
             </View>
@@ -562,7 +568,7 @@ export default function RecipeListScreen({ navigation }) {
           <View style={[styles.gridInner, pressed && styles.cardPressed]}>
             <View style={[styles.gridThumb, { backgroundColor: bg }]}>
               {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`grid-${item.id}`} />
+                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`grid-${item.id}`} transition={300} />
               ) : null}
               <View style={styles.cardDark} />
               <Pressable onPress={() => onToggleFav(item.id)} hitSlop={8} style={styles.gridFavBtn}>
@@ -637,60 +643,59 @@ export default function RecipeListScreen({ navigation }) {
       {/* Version update banner */}
       <VersionBanner />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: 18 + insets.top }]}>
-        <Text style={styles.wordmark}>
-          CEGIN<Text style={{ color: colors.primary }}>.</Text>
-        </Text>
-        <View style={styles.headerRight}>
-          <Text style={[styles.recipeCount, { fontFamily: MONO, color: colors.textMuted }]}>
-            {`${recipes.length} RECIPES`}
+      {/* Floating top section — nav bar + tabs */}
+      <View style={[styles.floatingTop, { paddingTop: 18 + insets.top }]}>
+
+      {/* Top nav bar — matches bottom nav style */}
+      <View style={[styles.topNav, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.wordmark}>
+            CEGIN<Text style={{ color: colors.primary }}>.</Text>
           </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              style={styles.settingsBtn}
+              onPress={() => navigation.navigate('Settings')}
+              hitSlop={8}
+            >
+              <Ionicons name="settings-outline" size={18} color={colors.textMuted} />
+            </Pressable>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 0 }}>
+          <View style={[styles.searchRow, { borderColor: colors.border, marginHorizontal: 0, marginTop: 0, flex: 1 }]}>
+            <TextInput
+              style={[styles.searchInput, { fontFamily: MONO, color: colors.text }]}
+              value={search}
+              onChangeText={setSearch}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setTimeout(() => { if (!clearingHistory.current) setSearchFocused(false); }, 200)}
+              onSubmitEditing={() => { if (search.trim()) saveSearchHistory(search); }}
+              placeholder="/ search recipes"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
           <Pressable
-            style={[styles.settingsBtn, { borderColor: colors.border }]}
-            onPress={() => navigation.navigate('Settings')}
-            hitSlop={8}
+            style={[styles.sortBtn, { marginTop: 2 }]}
+            onPress={() => {
+              const opts = ['newest', 'quickest', 'az', 'recently_cooked', 'most_cooked'];
+              setSortBy(opts[(opts.indexOf(sortBy) + 1) % opts.length]);
+            }}
           >
-            <Ionicons name="settings-outline" size={18} color={colors.textMuted} />
+            <Text style={[styles.sortLabel, { fontFamily: MONO, color: colors.textMuted }]}>
+              {sortBy === 'newest' ? 'NEW' : sortBy === 'quickest' ? 'FAST' : sortBy === 'az' ? 'A-Z' : sortBy === 'recently_cooked' ? 'RECENT' : 'TOP'}
+            </Text>
+          </Pressable>
+          <Pressable
+            ref={tutorialRefs.view}
+            style={[styles.viewBtn, { marginTop: 2 }]}
+            onPress={cycleViewMode}
+          >
+            <Ionicons name={VIEW_MODES.find((m) => m.key === viewMode)?.icon || 'square-outline'} size={16} color={colors.textMuted} />
           </Pressable>
         </View>
-      </View>
-
-      {/* Search + Sort */}
-      <View ref={tutorialRefs.search} style={styles.searchSortRow}>
-        <View style={[styles.searchRow, { borderColor: colors.border }]}>
-          <TextInput
-            style={[styles.searchInput, { fontFamily: MONO, color: colors.text }]}
-            value={search}
-            onChangeText={setSearch}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
-            onSubmitEditing={() => { if (search.trim()) saveSearchHistory(search); }}
-            placeholder="/ search recipes"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Text style={[styles.searchIcon, { color: colors.textMuted }]}>○</Text>
-        </View>
-        <Pressable
-          style={[styles.sortBtn, { borderColor: colors.border }]}
-          onPress={() => {
-            const opts = ['newest', 'quickest', 'az', 'recently_cooked', 'most_cooked'];
-            setSortBy(opts[(opts.indexOf(sortBy) + 1) % opts.length]);
-          }}
-        >
-          <Text style={[styles.sortLabel, { fontFamily: MONO, color: colors.textMuted }]}>
-            {sortBy === 'newest' ? 'NEW' : sortBy === 'quickest' ? 'FAST' : sortBy === 'az' ? 'A-Z' : sortBy === 'recently_cooked' ? 'RECENT' : 'TOP'}
-          </Text>
-        </Pressable>
-        <Pressable
-          ref={tutorialRefs.view}
-          style={[styles.viewBtn, { borderColor: colors.border }]}
-          onPress={cycleViewMode}
-        >
-          <Ionicons name={VIEW_MODES.find((m) => m.key === viewMode)?.icon || 'square-outline'} size={16} color={colors.textMuted} />
-        </Pressable>
       </View>
 
       {/* Search history chips */}
@@ -710,6 +715,21 @@ export default function RecipeListScreen({ navigation }) {
               <Text style={[styles.searchHistoryLabel, { fontFamily: MONO, color: colors.textMuted }]}>{term}</Text>
             </Pressable>
           ))}
+          <Pressable
+            delayPressIn={0}
+            onTouchStart={() => {
+              clearingHistory.current = true;
+              setSearchHistory([]);
+              AsyncStorage.removeItem(SEARCH_HISTORY_KEY).catch(() => {});
+              setTimeout(() => {
+                clearingHistory.current = false;
+                setSearchFocused(false);
+              }, 300);
+            }}
+            style={[styles.searchHistoryChip, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          >
+            <Text style={[styles.searchHistoryLabel, { fontFamily: MONO, color: colors.danger }]}>CLEAR</Text>
+          </Pressable>
         </ScrollView>
       )}
 
@@ -732,7 +752,7 @@ export default function RecipeListScreen({ navigation }) {
               requestAnimationFrame(() => {
                 tabScrollRef.current?.scrollTo({ x: Math.max(0, idx * 80 - 100), animated: true });
               });
-            }} style={[styles.tabItem, { borderColor: t === tab ? colors.primary : colors.border }, t === tab && { backgroundColor: colors.primary }]}>
+            }} style={[styles.tabItem, { borderColor: t === tab ? colors.primary : colors.border, backgroundColor: t === tab ? colors.primary : colors.surface }]}>
               <Text style={[
                 styles.tabLabel,
                 { fontFamily: MONO, color: t === tab ? colors.onPrimary : colors.textMuted },
@@ -743,6 +763,7 @@ export default function RecipeListScreen({ navigation }) {
           );
         })}
       </ScrollView>
+      </View>
 
       {/* List — outer View catches the swipe gesture, inner Animated.View carries the transition */}
       <View style={{ flex: 1 }} {...swipePan.panHandlers}>
@@ -778,12 +799,12 @@ export default function RecipeListScreen({ navigation }) {
           maxToRenderPerBatch={viewMode === 'grid' ? 10 : 8}
           windowSize={5}
           removeClippedSubviews={true}
-          contentContainerStyle={viewMode === 'grid' ? styles.gridList : viewMode === 'compact' ? styles.compactList : styles.list}
+          contentContainerStyle={[viewMode === 'grid' ? styles.gridList : viewMode === 'compact' ? styles.compactList : styles.list, searchFocused && searchHistory.length > 0 && { paddingTop: s(260) }]}
           {...flatListExtraProps}
           refreshControl={
             <RefreshControl
               refreshing={loading && filtered.length > 0}
-              onRefresh={() => load(search)}
+              onRefresh={() => load(search, true)}
               tintColor={colors.primary}
             />
           }
@@ -815,7 +836,18 @@ export default function RecipeListScreen({ navigation }) {
       {/* FAB */}
       <Pressable
         style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('EditRecipe', {})}
+        onPress={() => {
+          setModal({
+            title: 'Add Recipe',
+            message: 'How would you like to add a recipe?',
+            buttons: [
+              { text: 'URL', onPress: () => { setModal(null); navigation.navigate('EditRecipe', {}); } },
+              { text: 'MANUAL', onPress: () => { setModal(null); navigation.navigate('EditRecipe', {}); } },
+              { text: 'SCAN PHOTO', onPress: () => { setModal(null); navigation.navigate('ScanRecipe'); } },
+              { text: 'CANCEL', primary: true, onPress: () => setModal(null) },
+            ],
+          });
+        }}
       >
         <Ionicons name="fast-food-outline" size={24} color={colors.onPrimary} />
       </Pressable>
@@ -922,17 +954,34 @@ export default function RecipeListScreen({ navigation }) {
   );
 }
 
-const makeStyles = (colors) => StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
+
   root: { flex: 1, backgroundColor: colors.background },
+  floatingTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  topNav: {
+    borderWidth: 1.5,
+    borderRadius: 28,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginHorizontal: 32,
+    marginTop: -20,
+    gap: 8,
+  },
   offlineBanner: {
     backgroundColor: '#c0392b',
-    paddingVertical: 6,
-    paddingHorizontal: 20,
+    paddingVertical: s(6),
+    paddingHorizontal: s(20),
     alignItems: 'center',
   },
   offlineBannerText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: fs(11),
     fontWeight: '700',
     letterSpacing: 0.8,
     fontFamily: MONO,
@@ -941,88 +990,88 @@ const makeStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: s(20),
   },
-  wordmark: { fontSize: 18, fontWeight: '900', letterSpacing: 1, color: colors.text },
-  recipeCount: { fontSize: 11, letterSpacing: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  wordmark: { fontSize: fs(18), fontWeight: '900', letterSpacing: 1, color: colors.text },
+  recipeCount: { fontSize: fs(11), letterSpacing: 2 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: s(12) },
   settingsBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: s(34),
+    height: s(34),
+    borderRadius: s(17),
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hero: { paddingHorizontal: 20, paddingTop: 18 },
+  hero: { paddingHorizontal: s(20), paddingTop: s(18) },
   heroText: {
-    fontSize: 40,
+    fontSize: fs(40),
     fontWeight: '900',
-    lineHeight: 40,
+    lineHeight: fs(40),
     letterSpacing: -1,
     color: colors.text,
   },
-  heroOutline: { fontSize: 40, fontWeight: '900' },
+  heroOutline: { fontSize: fs(40), fontWeight: '900' },
   searchSortRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 20,
-    gap: 8,
+    paddingRight: s(20),
+    gap: s(8),
   },
   searchRow: {
-    marginHorizontal: 20,
-    marginTop: 18,
+    marginHorizontal: s(20),
+    marginTop: s(18),
     borderWidth: 1.5,
-    borderRadius: 20,
+    borderRadius: s(28),
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 14,
+    paddingRight: s(14),
     flex: 1,
   },
   searchInput: {
     flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 13,
+    paddingHorizontal: s(14),
+    paddingVertical: s(14),
+    fontSize: fs(13),
   },
-  searchIcon: { fontSize: 16 },
+  searchIcon: { fontSize: fs(16) },
   sortBtn: {
-    marginTop: 18,
+    marginTop: s(18),
     borderWidth: 1.5,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    borderRadius: s(28),
+    paddingHorizontal: s(12),
+    paddingVertical: s(11),
   },
-  sortLabel: { fontSize: 10, letterSpacing: 1 },
-  tabsRow: { marginTop: 14, marginBottom: 10, flexGrow: 0 },
-  tabsContent: { paddingHorizontal: 20, gap: 8 },
-  tabItem: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5 },
-  tabLabel: { fontSize: 11, letterSpacing: 0.5, fontWeight: '600' },
+  sortLabel: { fontSize: fs(10), letterSpacing: 1 },
+  tabsRow: { marginTop: s(14), marginBottom: s(10), flexGrow: 0 },
+  tabsContent: { paddingHorizontal: s(20), gap: s(8) },
+  tabItem: { paddingHorizontal: s(14), paddingVertical: s(7), borderRadius: s(20), borderWidth: 1.5 },
+  tabLabel: { fontSize: fs(11), letterSpacing: 0.5, fontWeight: '600' },
   tabActive: {},
   tabUnderline: { display: 'none' },
-  chipsRow: { marginTop: 8, flexGrow: 0 },
-  chipsContent: { paddingHorizontal: 20, gap: 8 },
+  chipsRow: { marginTop: s(8), flexGrow: 0 },
+  chipsContent: { paddingHorizontal: s(20), gap: s(8) },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: s(12),
+    paddingVertical: s(6),
+    borderRadius: s(20),
     borderWidth: 1.5,
   },
-  chipLabel: { fontSize: 10, letterSpacing: 0.8 },
-  searchHistoryRow: { marginTop: 6, flexGrow: 0 },
-  searchHistoryContent: { paddingHorizontal: 20, gap: 8 },
+  chipLabel: { fontSize: fs(10), letterSpacing: 0.8 },
+  searchHistoryRow: { marginTop: s(6), flexGrow: 0 },
+  searchHistoryContent: { paddingHorizontal: s(20), gap: s(8) },
   searchHistoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    paddingHorizontal: s(12),
+    paddingVertical: s(6),
+    borderRadius: s(20),
     borderWidth: 1,
   },
-  searchHistoryLabel: { fontSize: 10, letterSpacing: 0.5 },
-  list: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 100 },
+  searchHistoryLabel: { fontSize: fs(10), letterSpacing: 0.5 },
+  list: { paddingHorizontal: s(20), paddingTop: s(220), paddingBottom: s(100) },
   card: {
-    height: 200,
-    borderRadius: 18,
-    marginBottom: 14,
+    height: s(200),
+    borderRadius: s(20),
+    marginBottom: s(14),
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: colors.border,
@@ -1037,72 +1086,88 @@ const makeStyles = (colors) => StyleSheet.create({
   cardPressed: { opacity: 0.85 },
   heartBtn: {
     position: 'absolute',
-    top: 12,
-    right: 14,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    top: s(12),
+    right: s(14),
+    width: s(34),
+    height: s(34),
+    borderRadius: s(17),
     backgroundColor: 'rgba(19,16,16,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heart: { fontSize: 16, color: 'rgba(255,255,255,0.8)' },
+  heart: { fontSize: fs(16), color: 'rgba(255,255,255,0.8)' },
   cardFooter: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 16,
-    paddingTop: 44,
-    paddingBottom: 13,
+    paddingHorizontal: s(16),
+    paddingTop: s(44),
+    paddingBottom: s(13),
     backgroundColor: 'rgba(10,8,8,0.75)',
   },
   cardTitle: {
-    fontSize: 21,
+    fontSize: fs(21),
     fontWeight: '900',
     letterSpacing: -0.3,
     color: '#fff',
     textTransform: 'uppercase',
-    lineHeight: 22,
+    lineHeight: fs(22),
   },
   cardMeta: {
     fontFamily: MONO,
-    fontSize: 10.5,
+    fontSize: fs(10.5),
     color: 'rgba(255,255,255,0.8)',
-    marginTop: 6,
+    marginTop: s(6),
   },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: s(32) },
   emptyCard: {
     alignItems: 'center',
-    marginTop: 20,
-    padding: 40,
+    marginTop: s(20),
+    padding: s(40),
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderRadius: 18,
+    borderRadius: s(18),
   },
   emptyState: {
     alignItems: 'center',
-    marginTop: 40,
-    padding: 40,
+    marginTop: s(40),
+    padding: s(40),
   },
-  emptyEmoji: { fontSize: 56, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
-  emptyHint: { fontFamily: MONO, fontSize: 11, marginTop: 8 },
+  emptyEmoji: { fontSize: fs(56), marginBottom: s(16) },
+  emptyTitle: { fontSize: fs(18), fontWeight: '900', letterSpacing: 0.5 },
+  emptyHint: { fontFamily: MONO, fontSize: fs(11), marginTop: s(8) },
   emptyBtn: {
-    marginTop: 20,
+    marginTop: s(20),
     borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    borderRadius: s(10),
+    paddingHorizontal: s(20),
+    paddingVertical: s(12),
   },
-  emptyBtnText: { fontSize: 13, letterSpacing: 1 },
+  emptyBtnText: { fontSize: fs(13), letterSpacing: 1 },
+  fabScan: {
+    position: 'absolute',
+    right: s(18),
+    bottom: s(168),
+    width: s(48),
+    height: s(48),
+    borderRadius: s(24),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: s(3) },
+  },
   fab: {
     position: 'absolute',
-    right: 18,
-    bottom: 100,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    right: s(18),
+    bottom: s(100),
+    width: s(56),
+    height: s(56),
+    borderRadius: s(28),
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
@@ -1111,87 +1176,87 @@ const makeStyles = (colors) => StyleSheet.create({
     shadowColor: colors.primary,
     shadowOpacity: 0.4,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: s(4) },
   },
-  fabText: { fontSize: 24 },
+  fabText: { fontSize: fs(24) },
   menuOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
-    paddingHorizontal: 12,
-    paddingBottom: 24,
+    paddingHorizontal: s(12),
+    paddingBottom: s(24),
   },
   menuSheet: {
-    borderRadius: 24,
+    borderRadius: s(24),
     borderWidth: 1.5,
-    padding: 16,
+    padding: s(16),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
+    shadowOffset: { width: 0, height: s(-4) },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
   },
   menuHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: s(36),
+    height: s(4),
+    borderRadius: s(2),
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignSelf: 'center',
-    marginBottom: 12,
+    marginBottom: s(12),
   },
   menuTitle: {
-    fontSize: 10,
+    fontSize: fs(10),
     fontWeight: '700',
     letterSpacing: 1.5,
     textAlign: 'center',
-    paddingBottom: 14,
+    paddingBottom: s(14),
     fontFamily: MONO,
   },
   menuActions: {
     borderWidth: 1.5,
-    borderRadius: 16,
+    borderRadius: s(16),
     overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    gap: s(14),
+    paddingVertical: s(16),
+    paddingHorizontal: s(20),
   },
   menuIcon: {
-    fontSize: 16,
-    width: 22,
+    fontSize: fs(16),
+    width: s(22),
     textAlign: 'center',
   },
   menuItemText: {
-    fontSize: 15,
+    fontSize: fs(15),
     fontWeight: '600',
     letterSpacing: 0.2,
   },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,
+    marginHorizontal: s(16),
   },
   menuCancel: {
-    marginTop: 10,
+    marginTop: s(10),
     borderWidth: 1.5,
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: s(16),
+    paddingVertical: s(16),
     alignItems: 'center',
   },
   menuCancelText: {
-    fontSize: 15,
+    fontSize: fs(15),
     fontWeight: '700',
     letterSpacing: 0.3,
   },
   // View mode toggle button
   viewBtn: {
-    marginTop: 18,
+    marginTop: s(18),
     borderWidth: 1.5,
-    borderRadius: 20,
-    width: 38,
-    height: 38,
+    borderRadius: s(20),
+    width: s(38),
+    height: s(38),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1200,68 +1265,68 @@ const makeStyles = (colors) => StyleSheet.create({
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    borderRadius: 18,
+    marginBottom: s(10),
+    borderRadius: s(18),
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   listAccent: {
-    width: 4,
+    width: s(4),
     alignSelf: 'stretch',
   },
   listThumb: {
-    width: 80,
+    width: s(80),
     height: '100%',
-    minHeight: 72,
+    minHeight: s(72),
     overflow: 'hidden',
   },
   listInfo: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: s(12),
+    paddingHorizontal: s(14),
   },
   listTitle: {
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: '900',
     letterSpacing: 0.5,
-    lineHeight: 16,
+    lineHeight: fs(16),
   },
   listMeta: {
-    fontSize: 10,
-    marginTop: 5,
+    fontSize: fs(10),
+    marginTop: s(5),
     letterSpacing: 1,
   },
   listTagRow: {
     flexDirection: 'row',
-    gap: 5,
-    marginTop: 6,
+    gap: s(5),
+    marginTop: s(6),
   },
   listTag: {
     borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderRadius: s(6),
+    paddingHorizontal: s(6),
+    paddingVertical: s(2),
   },
   listTagText: {
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.5,
   },
   listFavBtn: {
-    paddingRight: 14,
-    paddingLeft: 8,
+    paddingRight: s(14),
+    paddingLeft: s(8),
   },
 
   // Grid view styles
-  gridList: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 },
-  gridRow: { gap: 10, marginBottom: 0 },
+  gridList: { paddingHorizontal: s(16), paddingTop: s(220), paddingBottom: s(100) },
+  gridRow: { gap: s(10), marginBottom: 0 },
   gridCard: {
     flex: 1,
-    marginBottom: 12,
+    marginBottom: s(12),
   },
   gridInner: {
-    borderRadius: 18,
+    borderRadius: s(18),
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: colors.border,
@@ -1273,11 +1338,11 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   gridFavBtn: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    top: s(8),
+    right: s(8),
+    width: s(30),
+    height: s(30),
+    borderRadius: s(15),
     backgroundColor: 'rgba(19,16,16,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1287,74 +1352,74 @@ const makeStyles = (colors) => StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 12,
-    paddingTop: 36,
-    paddingBottom: 10,
+    paddingHorizontal: s(12),
+    paddingTop: s(36),
+    paddingBottom: s(10),
     backgroundColor: 'rgba(10,8,8,0.80)',
   },
   gridTitle: {
-    fontSize: 11,
+    fontSize: fs(11),
     fontWeight: '900',
     letterSpacing: 0.3,
     color: '#fff',
-    lineHeight: 14,
+    lineHeight: fs(14),
   },
   gridMeta: {
-    fontSize: 9,
-    marginTop: 4,
+    fontSize: fs(9),
+    marginTop: s(4),
     letterSpacing: 1,
     color: 'rgba(255,255,255,0.7)',
   },
 
   // Compact view styles
-  compactList: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 100 },
+  compactList: { paddingHorizontal: s(20), paddingTop: s(220), paddingBottom: s(100) },
   compactRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: s(14),
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
+    gap: s(12),
   },
   compactIndex: {
-    fontSize: 11,
+    fontSize: fs(11),
     letterSpacing: 1,
-    width: 24,
+    width: s(24),
   },
   compactBody: {
     flex: 1,
   },
   compactTitle: {
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: '900',
     letterSpacing: 0.5,
-    lineHeight: 16,
+    lineHeight: fs(16),
   },
   compactSub: {
-    fontSize: 9,
-    marginTop: 3,
+    fontSize: fs(9),
+    marginTop: s(3),
     letterSpacing: 1,
   },
   compactTime: {
-    fontSize: 11,
+    fontSize: fs(11),
     fontWeight: '700',
     letterSpacing: 0.5,
   },
 
   collectionBadges: {
     position: 'absolute',
-    top: 12,
-    right: 14,
+    top: s(12),
+    right: s(14),
     flexDirection: 'row',
-    gap: 4,
+    gap: s(4),
   },
   collectionBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    borderRadius: s(6),
+    paddingHorizontal: s(7),
+    paddingVertical: s(3),
   },
   collectionBadgeText: {
     color: '#fff',
-    fontSize: 8,
+    fontSize: fs(8),
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -1363,46 +1428,47 @@ const makeStyles = (colors) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 30,
+    padding: s(30),
   },
   newColCard: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: s(340),
     borderWidth: 1.5,
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: s(20),
+    padding: s(24),
     alignItems: 'center',
   },
   newColTitle: {
-    fontSize: 18,
+    fontSize: fs(18),
     fontWeight: '900',
     letterSpacing: -0.3,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: s(16),
   },
   newColInput: {
     width: '100%',
     borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 14,
-    marginBottom: 16,
+    borderRadius: s(12),
+    padding: s(14),
+    fontSize: fs(14),
+    marginBottom: s(16),
   },
   newColBtns: {
     flexDirection: 'row',
-    gap: 12,
+    gap: s(12),
     width: '100%',
   },
   newColBtn: {
     flex: 1,
     borderWidth: 1.5,
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: s(12),
+    paddingVertical: s(14),
     alignItems: 'center',
   },
   newColBtnText: {
     fontWeight: '900',
-    fontSize: 13,
+    fontSize: fs(13),
     letterSpacing: 1,
   },
-});
+
+  });

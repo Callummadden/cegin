@@ -28,6 +28,7 @@ import { getStats, getTopRecipes } from '../stats';
 import BottomNav from '../components/BottomNav';
 import AiDisclaimer from '../components/AiDisclaimer';
 import { useAi } from '../aiContext';
+import { useResponsive } from '../utils/responsive';
 
 
 
@@ -107,7 +108,7 @@ function formatTime(date) {
 
 // ─── Animated typing indicator ───────────────────────────────────────────────
 
-function TypingDots({ color }) {
+function TypingDots({ color, styles }) {
   const dots = [
     useRef(new Animated.Value(0)).current,
     useRef(new Animated.Value(0)).current,
@@ -137,7 +138,7 @@ function TypingDots({ color }) {
 
 // ─── Terry avatar ────────────────────────────────────────────────────────────
 
-function TerryAvatar({ style, onPress, showGif, small }) {
+function TerryAvatar({ style, onPress, showGif, small, styles }) {
   const gifSource = showGif === 'talking' ? TERRY_TALKING : showGif === 'thinking' ? TERRY_THINKING : TERRY_IDLE;
 
   return (
@@ -149,7 +150,7 @@ function TerryAvatar({ style, onPress, showGif, small }) {
 
 // ─── History picker modal ────────────────────────────────────────────────────
 
-function HistoryModal({ visible, onClose, history, onSelect, onDelete, colors }) {
+function HistoryModal({ visible, onClose, history, onSelect, onDelete, colors, styles }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const renderHistoryItem = useCallback(({ item }) => (
     <View style={[styles.historyItem, { borderBottomColor: colors.border }]}>
@@ -216,7 +217,7 @@ function looksLikeRecipe(text) {
   return hasIngredients && hasSteps;
 }
 
-const MessageBubble = memo(function MessageBubble({ item, index, colors, speakingMsgIdx, speakMessage, onSaveRecipe, savingRecipe, userRecipes, onNavigateRecipe }) {
+const MessageBubble = memo(function MessageBubble({ item, index, colors, speakingMsgIdx, speakMessage, onSaveRecipe, savingRecipe, userRecipes, onNavigateRecipe, styles }) {
   const isUser = item.role === 'user';
   const showSaveBtn = !isUser && looksLikeRecipe(item.content);
 
@@ -301,6 +302,8 @@ const MessageBubble = memo(function MessageBubble({ item, index, colors, speakin
 
 export default function AssistantScreen({ navigation, route }) {
   const { colors } = useTheme();
+  const { s, fs } = useResponsive();
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const { noAI } = useAi();
   const insets = useSafeAreaInsets();
 
@@ -588,7 +591,7 @@ export default function AssistantScreen({ navigation, route }) {
           <Text style={[styles.screenTitle, { color: colors.text }]}>CHEF TERRY</Text>
         </View>
         <View style={styles.notConfigured}>
-          <TerryAvatar style={[styles.terryLarge, { borderColor: colors.primary }]} />
+          <TerryAvatar style={[styles.terryLarge, { borderColor: colors.primary }]} styles={styles} />
           <Text style={[styles.ncTitle, { color: colors.text }]}>AI ASSISTANT IS OFF</Text>
           <Text style={[styles.ncText, { color: colors.textMuted }]}>
             Add your DeepSeek API key to the server (set DEEPSEEK_API_KEY in server/.env and
@@ -629,6 +632,7 @@ export default function AssistantScreen({ navigation, route }) {
         savingRecipe={savingRecipe}
         userRecipes={userRecipes}
         onNavigateRecipe={navigateToRecipe}
+        styles={styles}
       />
     );
   }, [colors, speakingMsgIdx, speakMessage, stableSaveAsRecipe, savingRecipe, userRecipes, navigateToRecipe]);
@@ -638,6 +642,7 @@ export default function AssistantScreen({ navigation, route }) {
     <View style={styles.welcomeContainer}>
       <TerryAvatar
         style={[styles.terryWelcome, { borderColor: colors.primary, backgroundColor: colors.surface }]}
+        styles={styles}
       />
       <Text style={[styles.welcomeTitle, { color: colors.text }]}>Chef Terry at your service</Text>
       <Text style={[styles.welcomeMood, { fontFamily: MONO, color: colors.primary }]}>{mood}</Text>
@@ -706,25 +711,27 @@ export default function AssistantScreen({ navigation, route }) {
         {/* Header */}
         <View style={topBarStyle}>
           <Text style={[styles.screenTitle, { color: colors.text }]}>CHEF TERRY</Text>
-          {hasConversation && (
+          <View style={{ flexDirection: 'row', gap: 8, marginLeft: 'auto' }}>
+            {hasConversation && (
+              <Pressable
+                onPress={() => {
+                  setMessages([GREETING]);
+                  setConversationId(null);
+                  setFollowUps([]);
+                  setTerryFact(null);
+                }}
+                style={[styles.headerBtn, { borderColor: colors.primary, backgroundColor: 'rgba(255,90,38,0.08)' }]}
+              >
+                <Text style={[styles.headerBtnText, { fontFamily: MONO, color: colors.primary }]}>+ NEW</Text>
+              </Pressable>
+            )}
             <Pressable
-              onPress={() => {
-                setMessages([GREETING]);
-                setConversationId(null);
-                setFollowUps([]);
-                setTerryFact(null);
-              }}
-              style={[styles.headerBtn, { borderColor: colors.primary, backgroundColor: 'rgba(255,90,38,0.08)' }]}
+              onPress={() => { getChatHistory().then(setChatHistory); setHistoryVisible(true); }}
+              style={[styles.headerBtn, { borderColor: colors.border }]}
             >
-              <Text style={[styles.headerBtnText, { fontFamily: MONO, color: colors.primary }]}>+ NEW</Text>
+              <Text style={[styles.headerBtnText, { fontFamily: MONO, color: colors.textMuted }]}>HISTORY</Text>
             </Pressable>
-          )}
-          <Pressable
-            onPress={() => { getChatHistory().then(setChatHistory); setHistoryVisible(true); }}
-            style={[styles.headerBtn, { borderColor: colors.border }]}
-          >
-            <Text style={[styles.headerBtnText, { fontFamily: MONO, color: colors.textMuted }]}>HISTORY</Text>
-          </Pressable>
+          </View>
         </View>
 
         {/* Chat */}
@@ -751,7 +758,7 @@ export default function AssistantScreen({ navigation, route }) {
                   <View style={[styles.bubbleRow]}>
                     <Image source={TERRY_FRAMES[0]} style={[styles.msgAvatar, { borderColor: colors.border }]} />
                     <View style={[styles.bubble, styles.aiBubble, { backgroundColor: colors.surface, borderLeftColor: colors.primary, borderLeftWidth: 3 }]}>
-                      <TypingDots color={colors.textMuted} />
+                      <TypingDots color={colors.textMuted} styles={styles} />
                     </View>
                   </View>
                 )}
@@ -813,7 +820,7 @@ export default function AssistantScreen({ navigation, route }) {
 
         {/* Floating Terry avatar - only when chatting */}
         {hasConversation && (
-          <TerryAvatar style={terryCircleStyle} showGif={sending ? 'thinking' : speaking ? 'talking' : null} small />
+          <TerryAvatar style={terryCircleStyle} showGif={sending ? 'thinking' : speaking ? 'talking' : null} small styles={styles} />
         )}
 
         <HistoryModal
@@ -823,6 +830,7 @@ export default function AssistantScreen({ navigation, route }) {
           onSelect={loadConversation}
           onDelete={handleDeleteHistory}
           colors={colors}
+          styles={styles}
         />
 
       <BottomNav active="assistant" navigation={navigation} />
@@ -832,87 +840,89 @@ export default function AssistantScreen({ navigation, route }) {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
+
+
   root: { flex: 1 },
 
   // Terry avatar
   terryCircle: {
-    position: 'absolute', right: 14, width: 80, height: 80,
-    borderRadius: 40, overflow: 'hidden', borderWidth: 2, zIndex: 10,
+    position: 'absolute', right: s(14), width: s(80), height: s(80),
+    borderRadius: s(40), overflow: 'hidden', borderWidth: 2, zIndex: 10,
   },
-  terryFaceImg: { position: 'absolute', width: 190, height: 245, left: -50, top: -28 },
-  terryFaceImgSmall: { width: 130, height: 168, left: -40, top: -24 },
-  terryGifImg: { position: 'absolute', width: 170, height: 225, left: -30, top: -15 },
-  terryGifImgSmall: { width: 110, height: 146, left: -25, top: -12 },
+  terryFaceImg: { position: 'absolute', width: s(190), height: s(245), left: s(-50), top: s(-28) },
+  terryFaceImgSmall: { width: s(130), height: s(168), left: s(-40), top: s(-24) },
+  terryGifImg: { position: 'absolute', width: s(170), height: s(225), left: s(-30), top: s(-15) },
+  terryGifImgSmall: { width: s(110), height: s(146), left: s(-25), top: s(-12) },
   terryLarge: {
-    width: 120, height: 120, borderRadius: 60, overflow: 'hidden', borderWidth: 2,
-    alignSelf: 'center', marginBottom: 16,
+    width: s(120), height: s(120), borderRadius: s(60), overflow: 'hidden', borderWidth: 2,
+    alignSelf: 'center', marginBottom: s(16),
   },
   terryWelcome: {
-    width: 140, height: 140, borderRadius: 70, overflow: 'hidden', borderWidth: 3,
-    alignSelf: 'center', marginBottom: 16,
+    width: s(140), height: s(140), borderRadius: s(70), overflow: 'hidden', borderWidth: 3,
+    alignSelf: 'center', marginBottom: s(16),
   },
   msgAvatar: {
-    width: 28, height: 28, borderRadius: 14, overflow: 'hidden',
-    borderWidth: 1, marginRight: 8, marginTop: 2, flexShrink: 0,
+    width: s(28), height: s(28), borderRadius: s(14), overflow: 'hidden',
+    borderWidth: 1, marginRight: s(8), marginTop: s(2), flexShrink: 0,
   },
 
   // Header
-  topBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 20, paddingBottom: 8 },
-  backBtn: { width: 38, height: 38, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  screenTitle: { flex: 1, fontSize: 19, fontWeight: '900', letterSpacing: 0.5 },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: s(10), paddingLeft: s(20), paddingBottom: s(8) },
+  backBtn: { width: s(38), height: s(38), borderRadius: s(20), borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  screenTitle: { flex: 1, fontSize: fs(19), fontWeight: '900', letterSpacing: 0.5 },
   headerBtn: {
     borderWidth: 1.5,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: s(8),
+    paddingHorizontal: s(12),
+    paddingVertical: s(6),
   },
-  headerBtnText: { fontSize: 11, letterSpacing: 0.5, fontWeight: '600' },
+  headerBtnText: { fontSize: fs(11), letterSpacing: 0.5, fontWeight: '600' },
 
   // List
-  list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 },
+  list: { paddingHorizontal: s(16), paddingTop: s(8), paddingBottom: s(16) },
 
   // Bubbles
-  bubbleRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 10 },
-  bubble: { maxWidth: '85%', borderRadius: 16, paddingHorizontal: 15, paddingVertical: 11 },
-  userBubble: { borderBottomRightRadius: 4 },
-  aiBubble: { borderBottomLeftRadius: 4 },
-  bubbleText: { fontSize: 14, lineHeight: 21 },
-  bubbleMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 8, paddingHorizontal: 4 },
+  bubbleRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: s(10) },
+  bubble: { maxWidth: '85%', borderRadius: s(16), paddingHorizontal: s(15), paddingVertical: s(11) },
+  userBubble: { borderBottomRightRadius: s(4) },
+  aiBubble: { borderBottomLeftRadius: s(4) },
+  bubbleText: { fontSize: fs(14), lineHeight: fs(21) },
+  bubbleMeta: { flexDirection: 'row', alignItems: 'center', marginTop: s(3), gap: s(8), paddingHorizontal: s(4) },
   saveRecipeBtn: {
     borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginTop: 6,
+    borderRadius: s(20),
+    paddingHorizontal: s(14),
+    paddingVertical: s(8),
+    marginTop: s(6),
     alignSelf: 'flex-start',
   },
-  saveRecipeBtnText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
-  timestamp: { fontSize: 10 },
-  speakBtn: { padding: 2 },
-  speakBtnText: { fontSize: 14 },
+  saveRecipeBtnText: { fontSize: fs(12), fontWeight: '700', letterSpacing: 0.5 },
+  timestamp: { fontSize: fs(10) },
+  speakBtn: { padding: s(2) },
+  speakBtnText: { fontSize: fs(14) },
 
   // Typing dots
-  dotsRow: { flexDirection: 'row', gap: 6, paddingVertical: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
+  dotsRow: { flexDirection: 'row', gap: s(6), paddingVertical: s(4) },
+  dot: { width: s(8), height: s(8), borderRadius: s(4) },
 
   // Follow-up chips
-  chips: { marginTop: 8, gap: 8 },
-  chip: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  chipText: { fontSize: 13 },
+  chips: { marginTop: s(8), gap: s(8) },
+  chip: { borderWidth: 1.5, borderRadius: s(12), paddingHorizontal: s(16), paddingVertical: s(12) },
+  chipText: { fontSize: fs(13) },
 
   // Welcome screen
   welcomeContainer: {
-    alignItems: 'center', paddingTop: 30, paddingBottom: 20, paddingHorizontal: 20,
+    alignItems: 'center', paddingTop: s(30), paddingBottom: s(20), paddingHorizontal: s(20),
   },
   welcomeTitle: {
-    fontSize: 22, fontWeight: '900', letterSpacing: 0.3, marginBottom: 4,
+    fontSize: fs(22), fontWeight: '900', letterSpacing: 0.3, marginBottom: s(4),
   },
   welcomeMood: {
-    fontSize: 13, letterSpacing: 0.3, marginBottom: 10, fontStyle: 'italic',
+    fontSize: fs(13), letterSpacing: 0.3, marginBottom: s(10), fontStyle: 'italic',
   },
   welcomeSub: {
-    fontSize: 14, lineHeight: 21, textAlign: 'center', marginBottom: 24,
+    fontSize: fs(14), lineHeight: fs(21), textAlign: 'center', marginBottom: s(24),
   },
 
   // Quick actions grid
@@ -920,75 +930,77 @@ const styles = StyleSheet.create({
   visionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    marginHorizontal: 20,
-    marginTop: 14,
-    padding: 16,
-    borderRadius: 18,
+    gap: s(14),
+    marginHorizontal: s(20),
+    marginTop: s(14),
+    padding: s(16),
+    borderRadius: s(18),
     borderWidth: 1.5,
   },
-  visionIcon: { fontSize: 28 },
-  visionTitle: { fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
-  visionDesc: { fontSize: 10, letterSpacing: 0.3, marginTop: 3 },
-  visionArrow: { fontSize: 20, fontWeight: '700' },
+  visionIcon: { fontSize: fs(28) },
+  visionTitle: { fontSize: fs(14), fontWeight: '900', letterSpacing: 0.5 },
+  visionDesc: { fontSize: fs(10), letterSpacing: 0.3, marginTop: s(3) },
+  visionArrow: { fontSize: fs(20), fontWeight: '700' },
 
   quickActionsGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center',
-    paddingHorizontal: 4,
+    flexDirection: 'row', flexWrap: 'wrap', gap: s(10), justifyContent: 'center',
+    paddingHorizontal: s(4),
   },
   quickActionCard: {
-    borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
-    width: '47%', minHeight: 56, justifyContent: 'center',
+    borderWidth: 1.5, borderRadius: s(14), paddingHorizontal: s(16), paddingVertical: s(14),
+    width: '47%', minHeight: s(56), justifyContent: 'center',
   },
   quickActionText: {
-    fontSize: 13, lineHeight: 18, fontWeight: '600',
+    fontSize: fs(13), lineHeight: fs(18), fontWeight: '600',
   },
 
   // Fact banner
   factBanner: {
-    marginTop: 14, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14,
-    paddingVertical: 10, width: '100%',
+    marginTop: s(14), borderRadius: s(12), borderWidth: 1, paddingHorizontal: s(14),
+    paddingVertical: s(10), width: '100%',
   },
-  factText: { fontSize: 12, lineHeight: 18 },
+  factText: { fontSize: fs(12), lineHeight: fs(18) },
 
   // Mood bar
-  moodBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 4, paddingHorizontal: 16 },
-  moodText: { fontSize: 11, textAlign: 'center' },
+  moodBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: s(4), paddingHorizontal: s(16) },
+  moodText: { fontSize: fs(11), textAlign: 'center' },
 
   // Error
-  errorBar: { marginHorizontal: 16, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
-  error: { fontSize: 13 },
+  errorBar: { marginHorizontal: s(16), borderRadius: s(10), paddingHorizontal: s(14), paddingVertical: s(8) },
+  error: { fontSize: fs(13) },
 
   // Composer
-  composer: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1 },
-  input: { flex: 1, borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 13, fontSize: 14 },
-  sendBtn: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  composer: { flexDirection: 'row', alignItems: 'center', gap: s(10), paddingHorizontal: s(16), paddingVertical: s(12), borderTopWidth: 1 },
+  input: { flex: 1, borderWidth: 1.5, borderRadius: s(999), paddingHorizontal: s(18), paddingVertical: s(13), fontSize: fs(14) },
+  sendBtn: { width: s(46), height: s(46), borderRadius: s(23), alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   sendBtnOff: { opacity: 0.4 },
-  sendBtnText: { fontSize: 18, fontWeight: '700' },
+  sendBtnText: { fontSize: fs(18), fontWeight: '700' },
 
   // Not configured
-  notConfigured: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  ncTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5, marginBottom: 12 },
-  ncText: { fontSize: 15, lineHeight: 22, textAlign: 'center' },
+  notConfigured: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: s(32) },
+  ncTitle: { fontSize: fs(18), fontWeight: '900', letterSpacing: 0.5, marginBottom: s(12) },
+  ncText: { fontSize: fs(15), lineHeight: fs(22), textAlign: 'center' },
   subscribeBtn: {
-    marginTop: 20,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 16,
+    marginTop: s(20),
+    paddingHorizontal: s(28),
+    paddingVertical: s(14),
+    borderRadius: s(16),
   },
   subscribeText: {
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: '900',
     letterSpacing: 1,
   },
 
   // History modal
   menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  historySheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 8, paddingBottom: 20, borderWidth: 1, borderBottomWidth: 0, paddingHorizontal: 20 },
-  historyTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 1, textAlign: 'center', paddingVertical: 14 },
-  historyItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  historyItemTitle: { fontSize: 14, fontWeight: '600' },
-  historyMeta: { flexDirection: 'row', gap: 12, marginTop: 2 },
-  historyItemDate: { fontSize: 11, marginTop: 0 },
-  historyEmpty: { textAlign: 'center', paddingVertical: 30, fontSize: 12 },
+  historySheet: { borderTopLeftRadius: s(20), borderTopRightRadius: s(20), paddingTop: s(8), paddingBottom: s(20), borderWidth: 1, borderBottomWidth: 0, paddingHorizontal: s(20) },
+  historyTitle: { fontSize: fs(13), fontWeight: '900', letterSpacing: 1, textAlign: 'center', paddingVertical: s(14) },
+  historyItem: { flexDirection: 'row', alignItems: 'center', gap: s(12), paddingVertical: s(14), borderBottomWidth: StyleSheet.hairlineWidth },
+  historyItemTitle: { fontSize: fs(14), fontWeight: '600' },
+  historyMeta: { flexDirection: 'row', gap: s(12), marginTop: s(2) },
+  historyItemDate: { fontSize: fs(11), marginTop: 0 },
+  historyEmpty: { textAlign: 'center', paddingVertical: s(30), fontSize: fs(12) },
+
+  
 });

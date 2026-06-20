@@ -18,12 +18,14 @@ import StatsScreen from './src/screens/StatsScreen';
 import CookbookScreen from './src/screens/CookbookScreen';
 import TerryVisionScreen from './src/screens/TerryVisionScreen';
 import SetupScreen from './src/screens/SetupScreen';
+import ScanRecipeScreen from './src/screens/ScanRecipeScreen';
 
 import { ThemeProvider, useTheme } from './src/theme';
 import { ToastProvider } from './src/components/Toast';
 import { AiProvider } from './src/aiContext';
 import { registerForPushNotifications } from './src/notifications';
 import { api } from './src/api';
+import { connect as wsConnect, disconnect as wsDisconnect, initAppStateListener, removeAppStateListener } from './src/wsSync';
 
 const Stack = createNativeStackNavigator();
 
@@ -55,6 +57,7 @@ function AppNavigator({ initialRoute }) {
         <Stack.Screen name="RecipeList" component={RecipeListScreen} />
         <Stack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
         <Stack.Screen name="EditRecipe" component={EditRecipeScreen} />
+        <Stack.Screen name="ScanRecipe" component={ScanRecipeScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="Assistant" component={AssistantScreen} />
         <Stack.Screen name="CookMode" component={CookModeScreen} />
@@ -91,12 +94,20 @@ export default function App() {
         setInitialRoute('RecipeList');
         // Register for push notifications (native Android/iOS only, no-op in Expo Go)
         registerForPushNotifications(api.registerPushToken).catch(() => {});
+        // Connect WebSocket for real-time sync between devices
+        wsConnect();
+        initAppStateListener();
       } else {
         setInitialRoute('Setup');
       }
     }).catch(() => {
       setInitialRoute('Setup');
     });
+
+    return () => {
+      wsDisconnect();
+      removeAppStateListener();
+    };
   }, []);
 
   if (!initialRoute) {

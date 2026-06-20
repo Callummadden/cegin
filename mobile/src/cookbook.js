@@ -59,7 +59,8 @@ async function resolveEntries(entries) {
   }));
 }
 
-export async function getCookbook() {
+export async function getCookbook(forceRefresh = false) {
+  if (forceRefresh) _cache = null;
   if (_cache) return _cache;
 
   if (await isServerMode()) {

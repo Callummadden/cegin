@@ -28,6 +28,7 @@ const dbModule = require('./db');
 const { OAuth2Client } = require('google-auth-library');
 const { startCron } = require('./cron');
 const { sendPush } = require('./notifications');
+const { WebSocketServer } = require('ws');
 
 const app = express();
 
@@ -117,8 +118,8 @@ app.use('/api', (req, res, next) => {
 // Also returns version info so the client can check if it's outdated
 const SERVER_VERSION = require('./package.json').version;
 const MIN_CLIENT_VERSION = '1.1.5';    // oldest client that works with this server
-const LATEST_CLIENT_VERSION = '1.1.5'; // newest published client
-const LATEST_SERVER_VERSION = '1.1.5'; // bump this when you release a new server
+const LATEST_CLIENT_VERSION = '1.2.0'; // newest published client
+const LATEST_SERVER_VERSION = '1.2.0'; // bump this when you release a new server
 app.get('/api/health', (req, res) => res.json({
   ok: true,
   serverVersion: SERVER_VERSION,
@@ -516,6 +517,7 @@ app.post('/api/recipes', (req, res) => {
   }
   // S2-7: Pass userId for ownership
   res.status(201).json(createRecipe(req.body, req.user?.id));
+  broadcast('recipes', 'changed');
 });
 
 app.put('/api/recipes/:id', (req, res) => {
@@ -525,6 +527,7 @@ app.put('/api/recipes/:id', (req, res) => {
   const recipe = updateRecipe(id, req.body, req.user?.id);
   if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
   res.json(recipe);
+  broadcast('recipes', 'changed');
 });
 
 app.delete('/api/recipes/:id', (req, res) => {
@@ -535,6 +538,7 @@ app.delete('/api/recipes/:id', (req, res) => {
     return res.status(404).json({ error: 'Recipe not found' });
   }
   res.status(204).end();
+  broadcast('recipes', 'changed');
 });
 
 // --- Recipe collection names (distinct from recipes table) ---
@@ -567,6 +571,7 @@ app.post('/api/collections', (req, res, next) => {
   // S2-7: Pass userId for ownership; S2-9: createCollection now handles UNIQUE errors
   try {
     res.status(201).json(createCollection(req.body.name, req.user?.id));
+    broadcast('collections', 'changed');
   } catch (e) {
     next(e); // S2-10: Forward to error handler
   }
@@ -579,6 +584,7 @@ app.put('/api/collections/:id', (req, res) => {
   const col = updateCollection(id, req.body, req.user?.id);
   if (!col) return res.status(404).json({ error: 'Collection not found' });
   res.json(col);
+  broadcast('collections', 'changed');
 });
 
 app.delete('/api/collections/:id', (req, res) => {
@@ -588,7 +594,8 @@ app.delete('/api/collections/:id', (req, res) => {
   if (!deleteCollection(id, req.user?.id)) {
     return res.status(404).json({ error: 'Collection not found' });
   }
-  res.status(204).end();
+  res.json({ ok: true });
+  broadcast('collections', 'changed');
 });
 
 app.post('/api/collections/:id/recipes/:recipeId', (req, res) => {
@@ -599,6 +606,7 @@ app.post('/api/collections/:id/recipes/:recipeId', (req, res) => {
   const col = addRecipeToCollection(id, recipeId, req.user?.id);
   if (!col) return res.status(404).json({ error: 'Collection not found' });
   res.json(col);
+  broadcast('collections', 'changed');
 });
 
 app.delete('/api/collections/:id/recipes/:recipeId', (req, res) => {
@@ -609,6 +617,7 @@ app.delete('/api/collections/:id/recipes/:recipeId', (req, res) => {
   const col = removeRecipeFromCollection(id, recipeId, req.user?.id);
   if (!col) return res.status(404).json({ error: 'Collection not found' });
   res.json(col);
+  broadcast('collections', 'changed');
 });
 
 // --- Recipe Images ---
@@ -626,6 +635,7 @@ app.post('/api/recipes/:id/images', (req, res) => {
   const image = addRecipeImage(id, req.body.image_url, req.user?.id);
   if (!image) return res.status(404).json({ error: 'Recipe not found' });
   res.status(201).json(image);
+  broadcast('recipes', 'changed');
 });
 
 app.delete('/api/images/:id', (req, res) => {
@@ -635,6 +645,7 @@ app.delete('/api/images/:id', (req, res) => {
     return res.status(404).json({ error: 'Image not found' });
   }
   res.status(204).end();
+  broadcast('recipes', 'changed');
 });
 
 // --- Notification Settings ---
@@ -698,6 +709,7 @@ app.post('/api/meal-plan/sync', (req, res) => {
     }
     const synced = dbModule.syncMealPlan(req.user?.id || 0, plan);
     res.json(synced);
+    broadcast('meal_plan', 'changed');
   } catch (e) {
     console.error('[meal-plan/sync] Error:', e.message);
     res.status(500).json({ error: e.message });
@@ -726,6 +738,7 @@ app.post('/api/scanned-items', (req, res) => {
     }
   }
   res.status(201).json(created);
+  broadcast('scanned_items', 'changed');
 });
 
 app.put('/api/scanned-items/:id/consume', (req, res) => {
@@ -735,6 +748,7 @@ app.put('/api/scanned-items/:id/consume', (req, res) => {
     return res.status(404).json({ error: 'Item not found' });
   }
   res.json({ ok: true });
+  broadcast('scanned_items', 'changed');
 });
 
 // --- Cook Stats (kitchen log, streaks) ---
@@ -754,12 +768,14 @@ app.post('/api/stats/record', (req, res) => {
   const stats = dbModule.recordCook(userId, recipeId, recipeTitle || '', stepCount || 0);
   const streak = dbModule.getCookingStreak(userId);
   res.json({ ...stats, streak });
+  broadcast('stats', 'changed');
 });
 
 app.delete('/api/stats', (req, res) => {
   const userId = req.user?.id || 0;
   dbModule.clearStats(userId);
   res.json({ ok: true });
+  broadcast('stats', 'changed');
 });
 
 // --- Dietary Profiles ---
@@ -774,12 +790,14 @@ app.put('/api/dietary-profiles', (req, res) => {
   const { profiles } = req.body;
   if (!Array.isArray(profiles)) return res.status(400).json({ error: 'profiles array required' });
   res.json(dbModule.upsertDietaryProfiles(userId, profiles));
+  broadcast('dietary_profiles', 'changed');
 });
 
 app.delete('/api/dietary-profiles', (req, res) => {
   const userId = req.user?.id || 0;
   dbModule.clearDietaryProfiles(userId);
   res.json({ ok: true });
+  broadcast('dietary_profiles', 'changed');
 });
 
 // --- Cookbook Entries (kitchen log with photos) ---
@@ -876,6 +894,7 @@ app.post('/api/cookbook', (req, res) => {
     date: entry.date,
     notes: entry.notes,
   });
+  broadcast('cookbook', 'changed');
 });
 
 app.put('/api/cookbook/:id', (req, res) => {
@@ -908,6 +927,7 @@ app.put('/api/cookbook/:id', (req, res) => {
     date: updated.date,
     notes: updated.notes,
   });
+  broadcast('cookbook', 'changed');
 });
 
 app.delete('/api/cookbook/:id', (req, res) => {
@@ -921,6 +941,7 @@ app.delete('/api/cookbook/:id', (req, res) => {
     fs.unlink(filepath, () => {});
   }
   res.json({ ok: true });
+  broadcast('cookbook', 'changed');
 });
 
 app.delete('/api/cookbook', (req, res) => {
@@ -931,6 +952,7 @@ app.delete('/api/cookbook', (req, res) => {
     fs.unlink(path.join(UPLOADS_DIR, p), () => {});
   }
   res.json({ ok: true });
+  broadcast('cookbook', 'changed');
 });
 
 // --- Shopping List ---
@@ -945,12 +967,14 @@ app.put('/api/shopping-list', (req, res) => {
   const { items } = req.body;
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items array required' });
   res.json(dbModule.syncShoppingList(userId, items));
+  broadcast('shopping_list', 'changed');
 });
 
 app.delete('/api/shopping-list', (req, res) => {
   const userId = req.user?.id || 0;
   dbModule.clearShoppingList(userId);
   res.json({ ok: true });
+  broadcast('shopping_list', 'changed');
 });
 
 // --- Favorites ---
@@ -965,12 +989,14 @@ app.put('/api/favorites', (req, res) => {
   const { favorites } = req.body;
   if (!favorites || typeof favorites !== 'object') return res.status(400).json({ error: 'favorites object required' });
   res.json(dbModule.syncFavorites(userId, favorites));
+  broadcast('favorites', 'changed');
 });
 
 app.delete('/api/favorites', (req, res) => {
   const userId = req.user?.id || 0;
   dbModule.clearFavorites(userId);
   res.json({ ok: true });
+  broadcast('favorites', 'changed');
 });
 
 // --- Chat History ---
@@ -985,12 +1011,14 @@ app.put('/api/chat-history', (req, res) => {
   const { history } = req.body;
   if (!Array.isArray(history)) return res.status(400).json({ error: 'history array required' });
   res.json(dbModule.syncChatHistory(userId, history));
+  broadcast('chat_history', 'changed');
 });
 
 app.delete('/api/chat-history', (req, res) => {
   const userId = req.user?.id || 0;
   dbModule.clearChatHistory(userId);
   res.json({ ok: true });
+  broadcast('chat_history', 'changed');
 });
 
 // --- Activity Context ---
@@ -1005,12 +1033,14 @@ app.put('/api/activity-context', (req, res) => {
   const { context } = req.body;
   if (!context) return res.status(400).json({ error: 'context required' });
   res.json(dbModule.syncActivityContext(userId, context));
+  broadcast('activity_context', 'changed');
 });
 
 app.delete('/api/activity-context', (req, res) => {
   const userId = req.user?.id || 0;
   dbModule.clearActivityContext(userId);
   res.json({ ok: true });
+  broadcast('activity_context', 'changed');
 });
 
 // S2-10: Express error handler middleware (must be last)
@@ -1023,8 +1053,27 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 // 0.0.0.0 so the phone can reach it over the LAN
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Recipe server listening on http://0.0.0.0:${PORT}`);
   // Start Chef Terry's notification engine
   startCron();
 });
+
+// ── WebSocket — real-time sync between devices ─────────────────────────────
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+wss.on('connection', (ws) => {
+  console.log(`[WS] Client connected (${wss.clients.size} total)`);
+  ws.on('close', () => console.log(`[WS] Client disconnected (${wss.clients.size} total)`));
+  ws.on('error', (err) => console.error('[WS] Error:', err.message));
+});
+
+/** Broadcast a change event to all connected clients. */
+function broadcast(type, action) {
+  const msg = JSON.stringify({ type, action });
+  for (const client of wss.clients) {
+    if (client.readyState === 1) { // WebSocket.OPEN
+      client.send(msg);
+    }
+  }
+}

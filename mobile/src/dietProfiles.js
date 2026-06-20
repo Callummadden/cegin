@@ -15,7 +15,8 @@ async function isServerMode() {
   return mode === 'server';
 }
 
-export async function getDietaryProfiles() {
+export async function getDietaryProfiles(forceRefresh = false) {
+  if (forceRefresh) _profilesCache = null;
   if (_profilesCache) return _profilesCache;
 
   if (await isServerMode()) {

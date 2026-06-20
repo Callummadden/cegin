@@ -183,11 +183,29 @@ export const api = {
     return request('/health');
   },
 
-  listRecipes: async (search) => {
+  listRecipes: async (search, { forceRefresh = false } = {}) => {
     const mode = await getAppMode();
     if (mode === 'local') return localDb.listRecipes(search);
 
-    // Try cached data first (instant)
+    // forceRefresh: skip cache, always fetch from server
+    if (forceRefresh) {
+      try {
+        await checkOnline();
+        const data = await request(`/recipes${search ? `?search=${encodeURIComponent(search)}` : ''}`);
+        setOnline(true);
+        await cacheRecipes(data);
+        await mirrorRecipesToLocalDb(data);
+        return data;
+      } catch (e) {
+        setOnline(false);
+        // On failure, return whatever cache we have
+        const cached = await getCachedRecipes();
+        if (cached.length > 0) return cached;
+        throw e;
+      }
+    }
+
+    // Normal path: try cached data first (instant)
     try {
       const cached = await getCachedRecipes();
       if (cached.length > 0) {

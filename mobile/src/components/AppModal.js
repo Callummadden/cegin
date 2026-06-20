@@ -1,13 +1,20 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function AppModal({ visible, title, message, buttons, colors, onClose }) {
   if (!visible) return null;
+  const isLong = message && message.length > 200;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.overlay}>
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }, isLong && { maxWidth: 400 }]}>
           <Text style={[s.title, { color: colors.text }]}>{title}</Text>
-          {!!message && <Text style={[s.message, { color: colors.textMuted }]}>{message}</Text>}
+          {!!message && (
+            isLong ? (
+              <Text style={[s.messageLong, { color: colors.textMuted }]}>{message}</Text>
+            ) : (
+              <Text style={[s.message, { color: colors.textMuted }]}>{message}</Text>
+            )
+          )}
           <View style={s.buttons}>
             {buttons.map((btn, i) => (
               <Pressable
@@ -65,6 +72,12 @@ const s = StyleSheet.create({
   message: {
     fontSize: 14,
     lineHeight: 21,
+    textAlign: 'center',
+    marginBottom: 22,
+  },
+  messageLong: {
+    fontSize: 14,
+    lineHeight: 22,
     textAlign: 'center',
     marginBottom: 22,
   },

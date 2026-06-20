@@ -25,6 +25,7 @@ import { addCookbookEntry } from '../cookbook';
 import * as ImagePicker from 'expo-image-picker';
 import AiDisclaimer from '../components/AiDisclaimer';
 import { useAi } from '../aiContext';
+import { useResponsive } from '../utils/responsive';
 
 
 const fireImg = require('../../assets/fire.jpeg');
@@ -95,8 +96,9 @@ const ADJUST_SHORTCUTS = [
 export default function CookModeScreen({ route, navigation }) {
   useKeepAwake();
   const { colors } = useTheme();
+  const { s, fs } = useResponsive();
   const { noAI } = useAi();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
   const { recipe: originalRecipe } = route.params;
 
@@ -869,47 +871,48 @@ export default function CookModeScreen({ route, navigation }) {
   );
 }
 
-const makeStyles = (colors) => StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
+
   root: { flex: 1 },
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: s(20),
   },
   closeBtn: {
-    width: 38, height: 38, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center',
+    width: s(38), height: s(38), borderRadius: s(20), borderWidth: 1.5, alignItems: 'center', justifyContent: 'center',
   },
-  closeBtnText: { fontSize: 16 },
-  stepLabel: { fontSize: 12, letterSpacing: 2 },
-  progressTrack: { marginHorizontal: 20, marginTop: 16, height: 3, borderRadius: 2 },
-  progressFill: { height: 3, borderRadius: 2 },
+  closeBtnText: { fontSize: fs(16) },
+  stepLabel: { fontSize: fs(12), letterSpacing: 2 },
+  progressTrack: { marginHorizontal: s(20), marginTop: s(16), height: s(3), borderRadius: s(2) },
+  progressFill: { height: s(3), borderRadius: s(2) },
   recipeLabelRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, marginTop: 22,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: s(24), marginTop: s(22),
   },
-  recipeLabel: { fontSize: 11, letterSpacing: 1 },
-  adjustedBadge: { borderWidth: 1.5, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  adjustedBadgeText: { fontSize: 9, letterSpacing: 1 },
-  stepBody: { flex: 1, paddingHorizontal: 24, paddingTop: 14 },
-  stepText: { fontSize: 26, lineHeight: 38, fontWeight: '500', letterSpacing: -0.2 },
+  recipeLabel: { fontSize: fs(11), letterSpacing: 1 },
+  adjustedBadge: { borderWidth: 1.5, borderRadius: s(6), paddingHorizontal: s(8), paddingVertical: s(3) },
+  adjustedBadgeText: { fontSize: fs(9), letterSpacing: 1 },
+  stepBody: { flex: 1, paddingHorizontal: s(24), paddingTop: s(14) },
+  stepText: { fontSize: fs(26), lineHeight: fs(38), fontWeight: '500', letterSpacing: -0.2 },
 
   // Inline timer chip (appears after each detected time in step text)
   timerChip: {
     borderWidth: 1.5,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginLeft: 4,
+    borderRadius: s(8),
+    paddingHorizontal: s(8),
+    paddingVertical: s(3),
+    marginLeft: s(4),
     alignSelf: 'center',
   },
-  timerChipText: { fontSize: 13, fontWeight: '600', letterSpacing: 0.3 },
+  timerChipText: { fontSize: fs(13), fontWeight: '600', letterSpacing: 0.3 },
 
   // Legacy big timer card (fallback for single-timer steps)
   timerCard: {
-    marginTop: 28, borderWidth: 1.5, borderRadius: 16, padding: 20,
+    marginTop: s(28), borderWidth: 1.5, borderRadius: s(16), padding: s(20),
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
-  timerBig: { fontSize: 36, fontWeight: '700' },
-  timerCardActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  timerBtn: { borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 10 },
-  timerBtnText: { fontSize: 11, letterSpacing: 1 },
+  timerBig: { fontSize: fs(36), fontWeight: '700' },
+  timerCardActions: { flexDirection: 'row', gap: s(10), marginTop: s(10) },
+  timerBtn: { borderWidth: 1.5, borderRadius: s(8), paddingHorizontal: s(16), paddingVertical: s(10) },
+  timerBtnText: { fontSize: fs(11), letterSpacing: 1 },
 
   // Floating timer bar
   floatingBar: {
@@ -919,11 +922,11 @@ const makeStyles = (colors) => StyleSheet.create({
     right: 0,
     zIndex: 100,
     borderBottomWidth: 1,
-    paddingBottom: 6,
+    paddingBottom: s(6),
   },
   floatingBarInner: {
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingHorizontal: s(12),
+    gap: s(8),
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -931,101 +934,102 @@ const makeStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 8,
+    borderRadius: s(20),
+    paddingHorizontal: s(12),
+    paddingVertical: s(6),
+    gap: s(8),
   },
-  floatingTimerLabel: { fontSize: 10, letterSpacing: 0.5, maxWidth: 100 },
-  floatingTimerClock: { fontSize: 14, fontWeight: '700' },
-  floatingTimerActions: { flexDirection: 'row', gap: 4, marginLeft: 4 },
-  floatingActionBtn: { paddingHorizontal: 4, paddingVertical: 2 },
-  floatingActionText: { fontSize: 14 },
+  floatingTimerLabel: { fontSize: fs(10), letterSpacing: 0.5, maxWidth: s(100) },
+  floatingTimerClock: { fontSize: fs(14), fontWeight: '700' },
+  floatingTimerActions: { flexDirection: 'row', gap: s(4), marginLeft: s(4) },
+  floatingActionBtn: { paddingHorizontal: s(4), paddingVertical: s(2) },
+  floatingActionText: { fontSize: fs(14) },
 
-  awakeNote: { textAlign: 'center', paddingBottom: 8, fontSize: 10, letterSpacing: 1 },
-  navRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingBottom: 10 },
-  prevBtn: { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 17, alignItems: 'center' },
-  prevBtnText: { fontWeight: '900', fontSize: 14, letterSpacing: 1 },
-  nextBtn: { flex: 1.4, borderRadius: 12, paddingVertical: 17, alignItems: 'center' },
-  nextBtnText: { fontWeight: '900', fontSize: 14, letterSpacing: 1 },
+  awakeNote: { textAlign: 'center', paddingBottom: s(8), fontSize: fs(10), letterSpacing: 1 },
+  navRow: { flexDirection: 'row', gap: s(12), paddingHorizontal: s(20), paddingBottom: s(10) },
+  prevBtn: { flex: 1, borderWidth: 1.5, borderRadius: s(12), paddingVertical: s(17), alignItems: 'center' },
+  prevBtnText: { fontWeight: '900', fontSize: fs(14), letterSpacing: 1 },
+  nextBtn: { flex: 1.4, borderRadius: s(12), paddingVertical: s(17), alignItems: 'center' },
+  nextBtnText: { fontWeight: '900', fontSize: fs(14), letterSpacing: 1 },
 
   // AI action bar
   aiBar: {
-    flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 10, borderTopWidth: 1,
+    flexDirection: 'row', gap: s(10), paddingHorizontal: s(20), paddingTop: s(10), borderTopWidth: 1,
   },
-  panicBtn: { flex: 1.4, borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
-  panicImg: { width: 64, height: 64, borderRadius: 8, marginBottom: 4 },
-  panicBtnText: { color: '#fff', fontWeight: '900', fontSize: 11, letterSpacing: 0.5 },
-  adjustBtn: { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  adjustBtnText: { fontWeight: '900', fontSize: 12, letterSpacing: 1 },
+  panicBtn: { flex: 1.4, borderRadius: s(12), paddingVertical: s(14), alignItems: 'center', justifyContent: 'center' },
+  panicImg: { width: s(64), height: s(64), borderRadius: s(8), marginBottom: s(4) },
+  panicBtnText: { color: '#fff', fontWeight: '900', fontSize: fs(11), letterSpacing: 0.5 },
+  adjustBtn: { flex: 1, borderWidth: 1.5, borderRadius: s(12), paddingVertical: s(14), alignItems: 'center' },
+  adjustBtnText: { fontWeight: '900', fontSize: fs(12), letterSpacing: 1 },
 
   // Modal
   modalFlex: { flex: 1 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   panel: {
     maxHeight: '85%',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 12,
-    paddingHorizontal: 20,
+    borderTopLeftRadius: s(24),
+    borderTopRightRadius: s(24),
+    paddingTop: s(12),
+    paddingHorizontal: s(20),
   },
-  panelHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  panicHeaderImg: { alignItems: 'center', marginBottom: 12 },
-  panicHeaderImgInner: { width: 160, height: 160, borderRadius: 16 },
-  panelTitle: { fontSize: 22, fontWeight: '900', letterSpacing: -0.3 },
-  panelSubtitle: { fontSize: 13, lineHeight: 20, marginTop: 6, marginBottom: 16 },
-  shortcutsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
-  shortcutChip: { borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  shortcutText: { fontSize: 11, letterSpacing: 0.3 },
+  panelHandle: { width: s(40), height: s(4), borderRadius: s(2), alignSelf: 'center', marginBottom: s(16) },
+  panicHeaderImg: { alignItems: 'center', marginBottom: s(12) },
+  panicHeaderImgInner: { width: s(160), height: s(160), borderRadius: s(16) },
+  panelTitle: { fontSize: fs(22), fontWeight: '900', letterSpacing: -0.3 },
+  panelSubtitle: { fontSize: fs(13), lineHeight: fs(20), marginTop: s(6), marginBottom: s(16) },
+  shortcutsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: s(8), marginBottom: s(14) },
+  shortcutChip: { borderWidth: 1.5, borderRadius: s(8), paddingHorizontal: s(10), paddingVertical: s(6) },
+  shortcutText: { fontSize: fs(11), letterSpacing: 0.3 },
   panelInput: {
-    borderWidth: 1.5, borderRadius: 12, padding: 14, fontSize: 15, minHeight: 80, lineHeight: 22,
+    borderWidth: 1.5, borderRadius: s(12), padding: s(14), fontSize: fs(15), minHeight: s(80), lineHeight: fs(22),
   },
-  panelSubmit: { marginTop: 14, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
-  panelSubmitText: { color: '#fff', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
+  panelSubmit: { marginTop: s(14), borderRadius: s(12), paddingVertical: s(16), alignItems: 'center' },
+  panelSubmitText: { color: '#fff', fontWeight: '900', fontSize: fs(14), letterSpacing: 1 },
 
   // Results
-  resultCard: { marginTop: 18, borderWidth: 1.5, borderRadius: 16, padding: 16 },
-  resultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  resultTitle: { fontSize: 14, fontWeight: '900', letterSpacing: 1 },
-  confidenceBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-  confidenceText: { color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-  fixText: { fontSize: 15, lineHeight: 23 },
-  fixSteps: { marginTop: 12, gap: 8 },
-  fixStepRow: { flexDirection: 'row', gap: 8 },
-  fixStepNum: { fontSize: 14, fontWeight: '700', width: 20 },
-  fixStepText: { flex: 1, fontSize: 14, lineHeight: 21 },
-  preventionBox: { marginTop: 14, borderTopWidth: 1, paddingTop: 12 },
-  preventionLabel: { fontSize: 10, letterSpacing: 1, marginBottom: 4 },
-  preventionText: { fontSize: 13, lineHeight: 20, fontStyle: 'italic' },
-  tempBox: { marginTop: 14, borderWidth: 1.5, borderRadius: 10, padding: 12 },
-  tempLabel: { fontSize: 10, letterSpacing: 1, marginBottom: 4 },
-  tempValue: { fontSize: 20, fontWeight: '700' },
-  applyBtn: { marginTop: 16, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  applyBtnText: { color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 1 },
-  panelClose: { alignSelf: 'center', paddingVertical: 14 },
-  panelCloseText: { fontSize: 11, letterSpacing: 1 },
+  resultCard: { marginTop: s(18), borderWidth: 1.5, borderRadius: s(16), padding: s(16) },
+  resultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: s(10) },
+  resultTitle: { fontSize: fs(14), fontWeight: '900', letterSpacing: 1 },
+  confidenceBadge: { borderRadius: s(6), paddingHorizontal: s(8), paddingVertical: s(4) },
+  confidenceText: { color: '#fff', fontSize: fs(10), fontWeight: '700', letterSpacing: 0.5 },
+  fixText: { fontSize: fs(15), lineHeight: fs(23) },
+  fixSteps: { marginTop: s(12), gap: s(8) },
+  fixStepRow: { flexDirection: 'row', gap: s(8) },
+  fixStepNum: { fontSize: fs(14), fontWeight: '700', width: s(20) },
+  fixStepText: { flex: 1, fontSize: fs(14), lineHeight: fs(21) },
+  preventionBox: { marginTop: s(14), borderTopWidth: 1, paddingTop: s(12) },
+  preventionLabel: { fontSize: fs(10), letterSpacing: 1, marginBottom: s(4) },
+  preventionText: { fontSize: fs(13), lineHeight: fs(20), fontStyle: 'italic' },
+  tempBox: { marginTop: s(14), borderWidth: 1.5, borderRadius: s(10), padding: s(12) },
+  tempLabel: { fontSize: fs(10), letterSpacing: 1, marginBottom: s(4) },
+  tempValue: { fontSize: fs(20), fontWeight: '700' },
+  applyBtn: { marginTop: s(16), borderRadius: s(12), paddingVertical: s(14), alignItems: 'center' },
+  applyBtnText: { color: '#fff', fontWeight: '900', fontSize: fs(13), letterSpacing: 1 },
+  panelClose: { alignSelf: 'center', paddingVertical: s(14) },
+  panelCloseText: { fontSize: fs(11), letterSpacing: 1 },
   // Congrats modal
   congratsOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 30,
+    padding: s(30),
   },
   congratsCard: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: s(340),
     borderWidth: 1.5,
-    borderRadius: 24,
-    padding: 32,
+    borderRadius: s(24),
+    padding: s(32),
     alignItems: 'center',
   },
-  congratsEmoji: { fontSize: 64, marginBottom: 16 },
-  congratsTitle: { fontSize: 24, fontWeight: '900', letterSpacing: 1, textAlign: 'center' },
-  congratsRecipe: { fontSize: 11, letterSpacing: 1.5, marginTop: 8, textAlign: 'center' },
-  congratsMessage: { fontSize: 14, lineHeight: 22, textAlign: 'center', marginTop: 14, marginBottom: 24 },
-  congratsBtn: { width: '100%', borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  congratsBtnText: { fontWeight: '900', fontSize: 14, letterSpacing: 1 },
-  congratsSkipBtn: { width: '100%', borderWidth: 1.5, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 10 },
-  congratsSkipText: { fontSize: 11, letterSpacing: 1 },
-});
+  congratsEmoji: { fontSize: fs(64), marginBottom: s(16) },
+  congratsTitle: { fontSize: fs(24), fontWeight: '900', letterSpacing: 1, textAlign: 'center' },
+  congratsRecipe: { fontSize: fs(11), letterSpacing: 1.5, marginTop: s(8), textAlign: 'center' },
+  congratsMessage: { fontSize: fs(14), lineHeight: fs(22), textAlign: 'center', marginTop: s(14), marginBottom: s(24) },
+  congratsBtn: { width: '100%', borderRadius: s(14), paddingVertical: s(16), alignItems: 'center' },
+  congratsBtnText: { fontWeight: '900', fontSize: fs(14), letterSpacing: 1 },
+  congratsSkipBtn: { width: '100%', borderWidth: 1.5, borderRadius: s(14), paddingVertical: s(14), alignItems: 'center', marginTop: s(10) },
+  congratsSkipText: { fontSize: fs(11), letterSpacing: 1 },
+
+  });

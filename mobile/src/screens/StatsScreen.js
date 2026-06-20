@@ -14,10 +14,12 @@ import { getDietaryProfiles } from '../dietProfiles';
 import { getShoppingList } from '../shoppingList';
 import AppModal from '../components/AppModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsive } from '../utils/responsive';
 
 export default function StatsScreen({ navigation }) {
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { s, fs } = useResponsive();
+  const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
 
   const [recipes, setRecipes] = useState([]);
@@ -199,28 +201,30 @@ export default function StatsScreen({ navigation }) {
   );
 }
 
-const makeStyles = (colors) => StyleSheet.create({
+const makeStyles = (colors, s, fs) => StyleSheet.create({
+
   root: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingBottom: 0 },
-  backBtn: { width: 38, height: 38, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  screenTitle: { fontSize: 19, fontWeight: '900', letterSpacing: 0.5 },
-  heroRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginTop: 20 },
-  heroCard: { flex: 1, borderWidth: 1.5, borderRadius: 16, padding: 16, alignItems: 'center' },
-  heroNum: { fontSize: 32, fontWeight: '900' },
-  heroLabel: { fontSize: 10, letterSpacing: 1.5, marginTop: 4 },
-  section: { paddingHorizontal: 20, marginTop: 24 },
-  sectionLabel: { fontSize: 10, letterSpacing: 1, marginBottom: 10 },
-  statList: { borderWidth: 1.5, borderRadius: 12, overflow: 'hidden' },
-  statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
-  statKey: { fontSize: 14, flex: 1 },
-  statVal: { fontSize: 14, fontWeight: '700' },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  topRank: { fontSize: 14, fontWeight: '900', width: 28 },
-  topTitle: { fontSize: 14, flex: 1 },
-  tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tagChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
-  tagName: { fontSize: 13 },
-  tagCount: { fontSize: 11, fontWeight: '700' },
-  resetBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  resetText: { fontSize: 14, fontWeight: '500' },
-});
+  header: { flexDirection: 'row', alignItems: 'center', gap: s(14), paddingHorizontal: s(20), paddingBottom: 0 },
+  backBtn: { width: s(38), height: s(38), borderRadius: s(20), borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  screenTitle: { fontSize: fs(19), fontWeight: '900', letterSpacing: 0.5 },
+  heroRow: { flexDirection: 'row', gap: s(10), paddingHorizontal: s(20), marginTop: s(20) },
+  heroCard: { flex: 1, borderWidth: 1.5, borderRadius: s(16), padding: s(16), alignItems: 'center' },
+  heroNum: { fontSize: fs(32), fontWeight: '900' },
+  heroLabel: { fontSize: fs(10), letterSpacing: 1.5, marginTop: s(4) },
+  section: { paddingHorizontal: s(20), marginTop: s(24) },
+  sectionLabel: { fontSize: fs(10), letterSpacing: 1, marginBottom: s(10) },
+  statList: { borderWidth: 1.5, borderRadius: s(12), overflow: 'hidden' },
+  statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: s(16), paddingVertical: s(14), borderBottomWidth: 1 },
+  statKey: { fontSize: fs(14), flex: 1 },
+  statVal: { fontSize: fs(14), fontWeight: '700' },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: s(10), flex: 1 },
+  topRank: { fontSize: fs(14), fontWeight: '900', width: s(28) },
+  topTitle: { fontSize: fs(14), flex: 1 },
+  tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: s(8) },
+  tagChip: { flexDirection: 'row', alignItems: 'center', gap: s(6), borderWidth: 1.5, borderRadius: s(10), paddingHorizontal: s(12), paddingVertical: s(8) },
+  tagName: { fontSize: fs(13) },
+  tagCount: { fontSize: fs(11), fontWeight: '700' },
+  resetBtn: { borderWidth: 1.5, borderRadius: s(10), paddingVertical: s(14), alignItems: 'center' },
+  resetText: { fontSize: fs(14), fontWeight: '500' },
+
+  });
