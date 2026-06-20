@@ -19,7 +19,7 @@
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "package": "kitchen.cegin.app",
-      "versionCode": 9,
+      "versionCode": 10,
       "permissions": [
         "ACCESS_NETWORK_STATE",
         "INTERNET",
