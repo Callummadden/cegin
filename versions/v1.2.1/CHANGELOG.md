@@ -1,6 +1,6 @@
-# v1.2.0
+# v1.2.1
 
-Released: June 19, 2026
+Released: June 20, 2026
 
 ## Real-Time Sync
 - Added WebSocket-based real-time sync between devices sharing the same server
