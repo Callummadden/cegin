@@ -46,6 +46,7 @@ export function ToastProvider({ children }) {
           message={toast.message}
           actionLabel={toast.actionLabel}
           onAction={toast.onAction}
+          color={toast.color}
           opacity={opacity}
         />
       )}
@@ -57,7 +58,7 @@ export function useToast() {
   return useContext(ToastContext);
 }
 
-function Toast({ message, actionLabel, onAction, opacity }) {
+function Toast({ message, actionLabel, onAction, color, opacity }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -75,7 +76,7 @@ function Toast({ message, actionLabel, onAction, opacity }) {
       pointerEvents="box-none"
     >
       <View style={styles.row}>
-        <Text style={[styles.text, { color: colors.text }]}>{message}</Text>
+        <Text style={[styles.text, { color: color || colors.text }]}>{message}</Text>
         {actionLabel && (
           <Pressable
             onPress={() => {

@@ -39,6 +39,7 @@ import { MONO, useTheme } from '../theme';
 import BottomNav from '../components/BottomNav';
 import AiDisclaimer from '../components/AiDisclaimer';
 import { useAi } from '../aiContext';
+import { useToast } from '../components/Toast';
 import { useResponsive } from '../utils/responsive';
 
 const SECTIONS = [
@@ -51,10 +52,26 @@ export default function TerryVisionScreen({ route, navigation }) {
   const { colors } = useTheme();
   const { s, fs } = useResponsive();
   const { noAI } = useAi();
+  const { showToast } = useToast();
   const styles = useMemo(() => makeStyles(colors, s, fs), [colors, s, fs]);
   const insets = useSafeAreaInsets();
 
   const SCAN_KEY = 'terry_vision_scans';
+
+  // Migrate old single-scan format to array format
+  const migrateScans = (raw) => {
+    const migrated = {};
+    for (const key in raw) {
+      const val = raw[key];
+      if (Array.isArray(val)) {
+        migrated[key] = val;
+      } else if (val?.photo) {
+        // Old format: single object → wrap in array
+        migrated[key] = [val];
+      }
+    }
+    return migrated;
+  };
 
   // Load saved scans on focus
   useFocusEffect(
@@ -66,13 +83,18 @@ export default function TerryVisionScreen({ route, navigation }) {
           if (raw) {
             const data = JSON.parse(raw);
             const saved = data.scans || data; // backward compat
+            const migrated = migrateScans(saved);
             // Verify photos still exist
             const verified = {};
-            for (const key in saved) {
-              if (saved[key]?.photo) {
-                const info = await FileSystem.getInfoAsync(saved[key].photo);
-                if (info.exists) verified[key] = { ...saved[key], loading: false, error: null };
+            for (const key in migrated) {
+              const validScans = [];
+              for (const scan of migrated[key]) {
+                if (scan?.photo) {
+                  const info = await FileSystem.getInfoAsync(scan.photo);
+                  if (info.exists) validScans.push({ ...scan, loading: false, error: null });
+                }
               }
+              if (validScans.length) verified[key] = validScans;
             }
             if (cancelled) return;
             if (Object.keys(verified).length) setScans(verified);
@@ -84,14 +106,17 @@ export default function TerryVisionScreen({ route, navigation }) {
     }, [])
   );
 
-  // Each section: { photo, ingredients, loading, error }
+  // Each section: array of { photo, ingredients, loading, error }
   const [scans, setScans] = useState({});
   // Terry's combined suggestions
-  const [suggestions, setSuggestions] = useState(null); // array of { title, description, ingredients }
+  const [suggestions, setSuggestions] = useState(null);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestError, setSuggestError] = useState(null);
-  const [savedRecipes, setSavedRecipes] = useState({}); // { [index]: recipeId }
+  const [savedRecipes, setSavedRecipes] = useState({});
   const [previewRecipe, setPreviewRecipe] = useState(null);
+  // All user recipes for matching
+  const [allUserRecipes, setAllUserRecipes] = useState([]);
+  const [showAllMatches, setShowAllMatches] = useState(false);
 
   // Mark recipe as saved when returning from EditRecipeScreen
   useEffect(() => {
@@ -105,8 +130,9 @@ export default function TerryVisionScreen({ route, navigation }) {
   useEffect(() => {
     const toSave = {};
     for (const key in scans) {
-      if (scans[key].ingredients) {
-        toSave[key] = { photo: scans[key].photo, ingredients: scans[key].ingredients };
+      const withIngredients = scans[key].filter((s) => s.ingredients);
+      if (withIngredients.length) {
+        toSave[key] = withIngredients.map((s) => ({ photo: s.photo, ingredients: s.ingredients }));
       }
     }
     const data = { scans: toSave, suggestions };
@@ -116,31 +142,70 @@ export default function TerryVisionScreen({ route, navigation }) {
   const allIngredients = useMemo(() => {
     const set = new Set();
     for (const key in scans) {
-      if (scans[key].ingredients) {
-        scans[key].ingredients.forEach((i) => set.add(i));
+      for (const scan of scans[key]) {
+        if (scan.ingredients) scan.ingredients.forEach((i) => set.add(i));
       }
     }
     return [...set];
   }, [scans]);
 
-  const scannedCount = useMemo(() =>
-    Object.values(scans).filter((s) => s.ingredients?.length > 0).length,
-    [scans]
-  );
+  const scannedCount = useMemo(() => {
+    let count = 0;
+    for (const key in scans) {
+      count += scans[key].filter((s) => s.ingredients?.length > 0).length;
+    }
+    return count;
+  }, [scans]);
+
+  // Fetch all user recipes when we have ingredients to match against
+  useEffect(() => {
+    if (allIngredients.length === 0) { setAllUserRecipes([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const recipes = await api.listRecipes();
+        if (!cancelled) setAllUserRecipes(recipes || []);
+      } catch {
+        // Offline — no matching available
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [allIngredients.length]);
+
+  // Match saved recipes against scanned ingredients
+  const matchedRecipes = useMemo(() => {
+    if (!allIngredients.length || !allUserRecipes.length) return [];
+    const scanned = allIngredients.map((i) => i.toLowerCase());
+    const scored = [];
+    for (const recipe of allUserRecipes) {
+      const recipeIngs = (recipe.ingredients || []).map((i) => i.toLowerCase());
+      let matchCount = 0;
+      for (const si of scanned) {
+        if (recipeIngs.some((ri) => ri.includes(si) || si.includes(ri))) matchCount++;
+      }
+      if (matchCount > 0) {
+        scored.push({ recipe, matchCount, recipeTotal: recipeIngs.length });
+      }
+    }
+    // Sort by match count descending, then by % matched
+    scored.sort((a, b) => b.matchCount - a.matchCount || (b.matchCount / b.recipeTotal) - (a.matchCount / a.recipeTotal));
+    return scored; // Return all matches
+  }, [allIngredients, allUserRecipes]);
 
   const captureAndScan = async (sectionKey, fromGallery = false) => {
     try {
-      const launcher = fromGallery
-        ? ImagePicker.launchImageLibraryAsync
-        : ImagePicker.launchCameraAsync;
-
-      const result = await launcher({ quality: 0.5, base64: false });
+      const result = fromGallery
+        ? await ImagePicker.launchImageLibraryAsync({ quality: 0.5, base64: false })
+        : await ImagePicker.launchCameraAsync({ quality: 0.5, base64: false });
       if (result.canceled || !result.assets?.[0]) return;
 
+      // Add new scan entry to the section array
+      const newScan = { photo: result.assets[0].uri, loading: true, error: null, ingredients: null };
       setScans((prev) => ({
         ...prev,
-        [sectionKey]: { photo: result.assets[0].uri, loading: true, error: null, ingredients: null },
+        [sectionKey]: [...(prev[sectionKey] || []), newScan],
       }));
+      const scanIndex = (scans[sectionKey] || []).length;
 
       // Compress and resize
       const compressed = await manipulateAsync(
@@ -152,10 +217,11 @@ export default function TerryVisionScreen({ route, navigation }) {
       // Save photo permanently
       const savedUri = await savePhoto(compressed.uri, sectionKey);
 
-      setScans((prev) => ({
-        ...prev,
-        [sectionKey]: { ...prev[sectionKey], photo: savedUri },
-      }));
+      setScans((prev) => {
+        const arr = [...(prev[sectionKey] || [])];
+        arr[scanIndex] = { ...arr[scanIndex], photo: savedUri };
+        return { ...prev, [sectionKey]: arr };
+      });
 
       const base64 = await FileSystem.readAsStringAsync(compressed.uri, {
         encoding: FileSystem.EncodingType.Base64,
@@ -164,17 +230,28 @@ export default function TerryVisionScreen({ route, navigation }) {
       const { ingredients } = await api.scanFridge(base64);
 
       if (!ingredients.length) {
-        setScans((prev) => ({
-          ...prev,
-          [sectionKey]: { ...prev[sectionKey], loading: false, error: 'Couldn\'t identify any items. Try a clearer photo.' },
-        }));
+        // Remove the photo since nothing was found
+        setScans((prev) => {
+          const arr = [...(prev[sectionKey] || [])];
+          arr.splice(scanIndex, 1);
+          if (arr.length === 0) {
+            const next = { ...prev };
+            delete next[sectionKey];
+            return next;
+          }
+          return { ...prev, [sectionKey]: arr };
+        });
+        // Clean up the saved photo file
+        try { await FileSystem.deleteAsync(savedUri, { idempotent: true }); } catch {}
+        showToast({ message: 'Couldn\'t identify any items — try a clearer photo', color: '#ff4444', duration: 4000 });
         return;
       }
 
-      setScans((prev) => ({
-        ...prev,
-        [sectionKey]: { ...prev[sectionKey], ingredients, loading: false },
-      }));
+      setScans((prev) => {
+        const arr = [...(prev[sectionKey] || [])];
+        arr[scanIndex] = { ...arr[scanIndex], ingredients, loading: false };
+        return { ...prev, [sectionKey]: arr };
+      });
 
       // Sync scanned items to server for perishable tracking
       try {
@@ -189,40 +266,57 @@ export default function TerryVisionScreen({ route, navigation }) {
       setSuggestError(null);
 
     } catch (e) {
-      setScans((prev) => ({
-        ...prev,
-        [sectionKey]: { ...prev[sectionKey], loading: false, error: e.message },
-      }));
+      // If scan array entry doesn't exist yet, add error directly
+      setScans((prev) => {
+        const arr = [...(prev[sectionKey] || [])];
+        const idx = arr.length - 1;
+        if (idx >= 0 && arr[idx].loading) {
+          arr[idx] = { ...arr[idx], loading: false, error: e.message };
+        }
+        return { ...prev, [sectionKey]: arr };
+      });
     }
   };
 
-  const clearScan = (sectionKey) => {
+  const removeScan = (sectionKey, scanIndex) => {
     setScans((prev) => {
-      const next = { ...prev };
-      delete next[sectionKey];
-      return next;
+      const arr = [...(prev[sectionKey] || [])];
+      arr.splice(scanIndex, 1);
+      if (arr.length === 0) {
+        const next = { ...prev };
+        delete next[sectionKey];
+        return next;
+      }
+      return { ...prev, [sectionKey]: arr };
     });
     setSuggestions(null);
     setSavedRecipes({});
   };
 
-  const askTerry = async () => {
+  const askTerry = async (more = false) => {
     if (!allIngredients.length) return;
     setSuggesting(true);
     setSuggestError(null);
-    setSuggestions(null);
+    if (!more) setSuggestions(null);
 
     try {
       // Build context about where items came from
       const locationParts = [];
       for (const key in scans) {
-        if (scans[key].ingredients?.length) {
-          const section = SECTIONS.find((s) => s.key === key);
-          locationParts.push(`${section.label}: ${scans[key].ingredients.join(', ')}`);
+        const section = SECTIONS.find((s) => s.key === key);
+        for (const scan of scans[key]) {
+          if (scan.ingredients?.length) {
+            locationParts.push(`${section.label}: ${scan.ingredients.join(', ')}`);
+          }
         }
       }
 
-      const prompt = `I scanned my kitchen and found these ingredients:\n\n${locationParts.join('\n')}\n\nCombined: ${allIngredients.join(', ')}.\n\nWhat can I make? Suggest 2-3 practical recipes using what I have. Return ONLY a JSON object: { "recipes": [{ "title": "...", "description": "...", "ingredients": ["...", "..."], "steps": ["step 1", "step 2"], "difficulty": "easy|medium|hard", "prep_minutes": 10, "cook_minutes": 20 }] }. Keep descriptions under 30 words. List only the key ingredients used. Steps should be brief (under 15 words each). Don't suggest recipes needing major ingredients I don't have.`;
+      const existingTitles = (more && suggestions) ? suggestions.map((r) => r.title) : [];
+      const moreHint = more && existingTitles.length
+        ? `\n\nIMPORTANT: Suggest COMPLETELY DIFFERENT recipes from these already suggested: ${existingTitles.join(', ')}. Try different cuisines or cooking styles.`
+        : '';
+
+      const prompt = `I scanned my kitchen and found these ingredients:\n\n${locationParts.join('\n')}\n\nCombined: ${allIngredients.join(', ')}.\n\nWhat can I make? Suggest 2-3 practical recipes using what I have.${moreHint} Return ONLY a JSON object: { "recipes": [{ "title": "...", "description": "...", "ingredients": ["...", "..."], "steps": ["step 1", "step 2"], "difficulty": "easy|medium|hard", "prep_minutes": 10, "cook_minutes": 20 }] }. Keep descriptions under 30 words. List only the key ingredients used. Steps should be brief (under 15 words each). Don't suggest recipes needing major ingredients I don't have.`;
 
       const { reply } = await api.aiChat([{ role: 'user', content: prompt }]);
 
@@ -236,7 +330,7 @@ export default function TerryVisionScreen({ route, navigation }) {
       }
 
       if (parsed?.recipes?.length) {
-        setSuggestions(parsed.recipes);
+        setSuggestions((prev) => more && prev ? [...prev, ...parsed.recipes] : parsed.recipes);
       } else {
         setSuggestions([{ title: 'Recipe Suggestion', description: reply, ingredients: allIngredients }]);
       }
@@ -284,12 +378,10 @@ export default function TerryVisionScreen({ route, navigation }) {
 
   const openRecipe = async (index) => {
     if (!suggestions?.[index]) return;
-    // If already saved, navigate to detail
     if (savedRecipes[index]) {
       navigation.navigate('RecipeDetail', { id: savedRecipes[index] });
       return;
     }
-    // Show preview popup
     setPreviewRecipe({ ...suggestions[index], index });
   };
 
@@ -313,7 +405,14 @@ export default function TerryVisionScreen({ route, navigation }) {
   };
 
   const renderSection = (section) => {
-    const scan = scans[section.key];
+    const sectionScans = scans[section.key] || [];
+    // Merge all ingredients from all scans in this section
+    const sectionIngredients = [];
+    for (const scan of sectionScans) {
+      if (scan.ingredients) sectionIngredients.push(...scan.ingredients);
+    }
+    const isLoading = sectionScans.some((s) => s.loading);
+    const hasScans = sectionScans.length > 0;
 
     return (
       <View key={section.key} style={[styles.section, { borderColor: colors.border, backgroundColor: colors.surface }]}>
@@ -323,22 +422,63 @@ export default function TerryVisionScreen({ route, navigation }) {
             <Text style={[styles.sectionLabel, { fontFamily: MONO, color: colors.primary }]}>{section.label}</Text>
             <Text style={[styles.sectionDesc, { color: colors.textMuted }]}>{section.desc}</Text>
           </View>
-          {scan?.ingredients && (
+          {sectionIngredients.length > 0 && (
             <View style={[styles.countBadge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.countBadgeText}>{scan.ingredients.length}</Text>
+              <Text style={styles.countBadgeText}>{sectionIngredients.length}</Text>
             </View>
           )}
         </View>
 
-        {/* Photo / capture area */}
-        {scan?.photo ? (
-          <View style={styles.photoWrap}>
-            <Image source={{ uri: scan.photo }} style={styles.photo} contentFit="cover" />
-            <Pressable style={styles.retakeBtn} onPress={() => clearScan(section.key)}>
-              <Text style={styles.retakeBtnText}>✕</Text>
-            </Pressable>
+        {/* Photos — horizontal scroll when multiple */}
+        {hasScans && (
+          <View style={styles.photoScrollWrap}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.photoScroll}
+              contentContainerStyle={styles.photoScrollContent}
+            >
+              {/* Add more button — always first */}
+              <View style={styles.addMoreWrap}>
+                <View style={styles.addMoreRow}>
+                  <Pressable
+                    style={[styles.addMoreBtn, { borderColor: colors.primary, backgroundColor: colors.background }]}
+                    onPress={() => captureAndScan(section.key)}
+                  >
+                    <Text style={styles.addMoreIcon}>📷</Text>
+                    <Text style={[styles.addMoreLabel, { color: colors.text }]}>CAMERA</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.addMoreBtn, { borderColor: colors.border, backgroundColor: colors.background }]}
+                    onPress={() => captureAndScan(section.key, true)}
+                  >
+                    <Text style={styles.addMoreIcon}>🖼️</Text>
+                    <Text style={[styles.addMoreLabel, { color: colors.text }]}>GALLERY</Text>
+                  </Pressable>
+              </View>
+            </View>
+
+              {/* Photos */}
+              {sectionScans.map((scan, i) => (
+                <View key={i} style={[styles.photoWrap, { marginLeft: i === 0 ? s(10) : 0, marginRight: s(10) }]}>
+                  <Image source={{ uri: scan.photo }} style={styles.photo} contentFit="cover" />
+                  <Pressable style={styles.retakeBtn} onPress={() => removeScan(section.key, i)}>
+                    <Text style={styles.retakeBtnText}>✕</Text>
+                  </Pressable>
+                  {scan.loading && (
+                    <View style={styles.photoLoadingOverlay}>
+                      <ActivityIndicator size="small" color="#fff" />
+                    </View>
+                  )}
+                </View>
+              ))}
+
+            </ScrollView>
           </View>
-        ) : (
+        )}
+
+        {/* Initial capture buttons — no scans yet */}
+        {!hasScans && (
           <View style={styles.captureRow}>
             <Pressable
               style={[styles.captureBtn, { borderColor: colors.primary, backgroundColor: colors.background }]}
@@ -357,20 +497,17 @@ export default function TerryVisionScreen({ route, navigation }) {
           </View>
         )}
 
-        {scan?.loading && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textMuted }]}>Scanning...</Text>
-          </View>
-        )}
+        {/* Per-scan errors */}
+        {sectionScans.map((scan, i) => scan.error ? (
+          <Text key={`err-${i}`} style={[styles.errorText, { color: colors.danger }]}>
+            {scan.error}
+          </Text>
+        ) : null)}
 
-        {scan?.error && (
-          <Text style={[styles.errorText, { color: colors.danger }]}>{scan.error}</Text>
-        )}
-
-        {scan?.ingredients && (
+        {/* Merged ingredients for the section */}
+        {sectionIngredients.length > 0 && (
           <View style={styles.ingredientChips}>
-            {scan.ingredients.map((ing, i) => (
+            {sectionIngredients.map((ing, i) => (
               <View key={i} style={[styles.ingredientChip, { borderColor: colors.border, backgroundColor: colors.background }]}>
                 <Text style={[styles.ingredientText, { color: colors.text2 }]}>{ing}</Text>
               </View>
@@ -438,6 +575,31 @@ export default function TerryVisionScreen({ route, navigation }) {
             </View>
           )}
 
+          {allIngredients.length > 0 && matchedRecipes.length > 0 && (
+            <View style={styles.matchedSection}>
+              <Text style={[styles.matchedLabel, { fontFamily: MONO, color: colors.primary }]}>🍳 FROM YOUR RECIPES</Text>
+              {(showAllMatches ? matchedRecipes : matchedRecipes.slice(0, 3)).map(({ recipe, matchCount, recipeTotal }) => (
+                <Pressable
+                  key={recipe.id}
+                  style={[styles.matchedCard, { borderColor: colors.border, backgroundColor: colors.background }]}
+                  onPress={() => navigation.navigate('RecipeDetail', { id: recipe.id })}
+                >
+                  <Text style={[styles.matchedCardTitle, { color: colors.text }]} numberOfLines={1}>{recipe.title}</Text>
+                  <Text style={[styles.matchedCardBadge, { fontFamily: MONO, color: colors.primary }]}>
+                    {matchCount}/{recipeTotal}
+                  </Text>
+                </Pressable>
+              ))}
+              {matchedRecipes.length > 3 && (
+                <Pressable onPress={() => setShowAllMatches((v) => !v)}>
+                  <Text style={[styles.showAllBtn, { fontFamily: MONO, color: colors.textMuted }]}>
+                    {showAllMatches ? 'SHOW LESS' : `SHOW ALL ${matchedRecipes.length}`}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
           {allIngredients.length > 0 && (
             <Pressable
               style={[styles.askBtn, { backgroundColor: colors.primary }, suggesting && { opacity: 0.6 }]}
@@ -458,6 +620,7 @@ export default function TerryVisionScreen({ route, navigation }) {
 
           {suggestions && (
             <View style={styles.suggestionsList}>
+              <Text style={[styles.matchedLabel, { fontFamily: MONO, color: colors.primary, marginBottom: s(4) }]}>🐾 TERRY SUGGESTS</Text>
               {suggestions.map((recipe, i) => (
                 <View
                   key={i}
@@ -495,6 +658,17 @@ export default function TerryVisionScreen({ route, navigation }) {
                 </View>
               ))}
               <AiDisclaimer />
+              <Pressable
+                style={[styles.moreBtn, { borderColor: colors.border }, suggesting && { opacity: 0.6 }]}
+                onPress={() => askTerry(true)}
+                disabled={suggesting}
+              >
+                {suggesting ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={[styles.moreBtnText, { fontFamily: MONO, color: colors.textMuted }]}>🔄 GENERATE MORE</Text>
+                )}
+              </Pressable>
             </View>
           )}
         </View>
@@ -624,6 +798,14 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   askBtn: { borderRadius: s(16), paddingVertical: s(14), alignItems: 'center' },
   askBtnText: { fontWeight: '900', fontSize: fs(13), letterSpacing: 1 },
   suggestionsList: { marginTop: s(14), paddingTop: s(14), borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', gap: s(12) },
+
+  // Matched recipes from user's collection
+  matchedSection: { marginTop: s(10), paddingTop: s(10), borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', gap: s(6) },
+  matchedLabel: { fontSize: fs(10), letterSpacing: 1.5, fontWeight: '700', marginBottom: s(2) },
+  matchedCard: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderRadius: s(12), paddingHorizontal: s(12), paddingVertical: s(10), gap: s(8) },
+  matchedCardTitle: { fontSize: fs(13), fontWeight: '700', flex: 1 },
+  matchedCardBadge: { fontSize: fs(10), fontWeight: '700', letterSpacing: 0.5 },
+  showAllBtn: { fontSize: fs(10), letterSpacing: 1, textAlign: 'center', paddingVertical: s(6) },
   recipeCard: { borderWidth: 1.5, borderRadius: s(16), padding: s(14) },
   recipeCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: s(6) },
   recipeCardTitle: { fontSize: fs(16), fontWeight: '900', flex: 1 },
@@ -634,6 +816,9 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   saveBtn: { borderWidth: 1.5, borderRadius: s(14), paddingHorizontal: s(16), paddingVertical: s(10), marginTop: s(10) },
   saveBtnText: { fontSize: fs(12), fontWeight: '700', letterSpacing: 0.5 },
   tapHint: { fontSize: fs(10), letterSpacing: 0.5 },
+  // Generate more button
+  moreBtn: { borderWidth: 1.5, borderRadius: s(12), paddingVertical: s(12), alignItems: 'center', marginTop: s(4) },
+  moreBtnText: { fontSize: fs(11), letterSpacing: 1 },
   // Preview modal
   previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: s(20) },
   previewCard: { borderRadius: s(24), borderWidth: 1.5, padding: s(24) },
@@ -690,11 +875,38 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   captureBtnIcon: { fontSize: fs(18) },
   captureBtnLabel: { fontSize: fs(12), fontWeight: '700', letterSpacing: 0.5 },
 
-  // Photo
-  photoWrap: { borderRadius: s(14), overflow: 'hidden', position: 'relative' },
-  photo: { width: '100%', height: s(160), borderRadius: s(14) },
+  // Photo scroll (multi-photo)
+  photoScrollWrap: { position: 'relative', marginBottom: s(10) },
+  photoScroll: {},
+  photoScrollContent: { alignItems: 'flex-start' },
+  photoWrap: { borderRadius: s(14), overflow: 'hidden', position: 'relative', width: s(200) },
+  photo: { width: s(200), height: s(160), borderRadius: s(14) },
+  photoLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: s(14),
+  },
   retakeBtn: { position: 'absolute', top: s(10), right: s(10), width: s(28), height: s(28), borderRadius: s(14), backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   retakeBtnText: { color: '#fff', fontSize: fs(14), fontWeight: '700' },
+
+  // Add more buttons (in scroll)
+  addMoreWrap: { justifyContent: 'center' },
+  addMoreRow: { gap: s(8) },
+  addMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: s(6),
+    borderWidth: 1.5,
+    borderRadius: s(12),
+    paddingVertical: s(12),
+    paddingHorizontal: s(14),
+    width: s(120),
+  },
+  addMoreIcon: { fontSize: fs(16) },
+  addMoreLabel: { fontSize: fs(11), fontWeight: '700', letterSpacing: 0.5 },
 
   // Loading
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: s(10), marginTop: s(12) },

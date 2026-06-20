@@ -841,9 +841,9 @@ export default function RecipeListScreen({ navigation }) {
             title: 'Add Recipe',
             message: 'How would you like to add a recipe?',
             buttons: [
-              { text: 'URL', onPress: () => { setModal(null); navigation.navigate('EditRecipe', {}); } },
-              { text: 'MANUAL', onPress: () => { setModal(null); navigation.navigate('EditRecipe', {}); } },
-              { text: 'SCAN PHOTO', onPress: () => { setModal(null); navigation.navigate('ScanRecipe'); } },
+              { text: 'URL', onPress: () => { setModal(null); navigation.navigate('EditRecipe', { mode: 'url' }); } },
+              { text: 'MANUAL', onPress: () => { setModal(null); navigation.navigate('EditRecipe', { mode: 'manual' }); } },
+              { text: 'SCAN RECIPE', onPress: () => { setModal(null); navigation.navigate('ScanRecipe'); } },
               { text: 'CANCEL', primary: true, onPress: () => setModal(null) },
             ],
           });

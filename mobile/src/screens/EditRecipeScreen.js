@@ -32,6 +32,8 @@ export default function EditRecipeScreen({ route, navigation }) {
 
   const existing = route.params?.recipe;
   const source = existing ?? route.params?.draft;
+  const mode = route.params?.mode; // 'url' | 'manual' | undefined
+  const isUrlMode = mode === 'url' && !source;
   const [title, setTitle] = useState(source?.title ?? '');
   const [description, setDescription] = useState(source?.description ?? '');
   const [ingredients, setIngredients] = useState(source?.ingredients?.join('\n') ?? '');
@@ -44,13 +46,12 @@ export default function EditRecipeScreen({ route, navigation }) {
   const [notes, setNotes] = useState(source?.notes ?? '');
   const [collection, setCollection] = useState(source?.collection ?? '');
   const [saving, setSaving] = useState(false);
-
-  const showImport = !source;
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
   const [cleaning, setCleaning] = useState(false);
+  const [hasImported, setHasImported] = useState(false);
   const [cleanError, setCleanError] = useState(null);
   const [modal, setModal] = useState(null);
 
@@ -76,6 +77,7 @@ export default function EditRecipeScreen({ route, navigation }) {
     try {
       const { recipe } = await api.importRecipe(trimmed);
       fillFrom(recipe);
+      setHasImported(true);
     } catch (e) {
       setImportError(e.message);
     } finally {
@@ -176,7 +178,45 @@ export default function EditRecipeScreen({ route, navigation }) {
           </Pressable>
         </View>
 
-        {/* Form fields */}
+        {/* URL Import — only in URL mode */}
+        {isUrlMode && (
+          <View style={[styles.importSection, { marginBottom: s(20) }]}>
+            <Text style={[styles.fieldLabel, { fontFamily: MONO, color: colors.textMuted }]}>IMPORT FROM URL</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+              value={importUrl}
+              onChangeText={setImportUrl}
+              placeholder="Paste a recipe page URL..."
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              returnKeyType="go"
+              onSubmitEditing={importFromUrl}
+            />
+            <Pressable
+              style={[styles.importBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }, importing && styles.disabled]}
+              onPress={importFromUrl}
+              disabled={importing}
+            >
+              {importing ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={[styles.importBtnText, { fontFamily: MONO, color: colors.text }]}>🔗 IMPORT</Text>
+              )}
+            </Pressable>
+            {importError && <Text style={[styles.errorText, { color: colors.danger }]}>{importError}</Text>}
+          </View>
+        )}
+
+        {/* Form fields — always visible except URL mode before import */}
+        {(!isUrlMode || hasImported) && (
+        <>
+        {isUrlMode && hasImported && (
+          <View style={[styles.divider, { borderColor: colors.border }]}>
+            <Text style={[styles.fieldLabel, { fontFamily: MONO, color: colors.textMuted }]}>MAKE EDITS</Text>
+          </View>
+        )}
         <View style={{ marginBottom: 16 }}>
           <Text style={[styles.fieldLabel, { fontFamily: MONO, color: colors.textMuted }]}>TITLE</Text>
           <TextInput
@@ -356,7 +396,6 @@ export default function EditRecipeScreen({ route, navigation }) {
         )}
 
         {/* Save */}
-
         <Pressable
           style={[styles.saveBtn, { backgroundColor: colors.primary }, saving && styles.disabled]}
           onPress={save}
@@ -366,6 +405,8 @@ export default function EditRecipeScreen({ route, navigation }) {
             {saving ? 'SAVING…' : existing ? 'SAVE CHANGES' : 'SAVE RECIPE'}
           </Text>
         </Pressable>
+        </>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
