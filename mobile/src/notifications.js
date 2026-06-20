@@ -8,7 +8,6 @@ const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.Store
 // Lazy-load expo-notifications — only resolved on first call, never at import time
 let _Notifications = null;
 let _loaded = false;
-let _channelReady = false;
 
 function N() {
   if (_loaded) return _Notifications;
@@ -23,58 +22,10 @@ function N() {
         shouldSetBadge: false,
       }),
     });
-    // Create Android notification channels immediately
-    if (Platform.OS === 'android') {
-      const imp = _Notifications.AndroidImportance?.MAX ?? 4;
-      _Notifications.setNotificationChannelAsync('timers', {
-        name: 'Cooking Timers',
-        importance: imp,
-        sound: 'default',
-        vibrationPattern: [0, 500, 500, 500, 500, 500, 500, 500],
-        lightColor: '#FF5A26',
-      }).then(() => { _channelReady = true; }).catch(() => {});
-    } else {
-      _channelReady = true;
-    }
   } catch {
     _Notifications = null;
   }
   return _Notifications;
-}
-
-// Ensure channel + handler are ready — call this at app startup
-export async function initNotifications() {
-  const n = N();
-  if (!n) return;
-  // Wait for channel creation on Android
-  if (Platform.OS === 'android' && !_channelReady) {
-    try {
-      const imp = n.AndroidImportance?.MAX ?? 4;
-      await n.setNotificationChannelAsync('timers', {
-        name: 'Cooking Timers',
-        importance: imp,
-        sound: 'default',
-        vibrationPattern: [0, 500, 500, 500, 500, 500, 500, 500],
-        lightColor: '#FF5A26',
-      });
-      _channelReady = true;
-    } catch (e) {
-      console.warn('[notifications] Channel creation failed:', e);
-    }
-  }
-  // Check exact alarm permission on Android 12+
-  try {
-    const { NativeModules } = require('react-native');
-    if (NativeModules.ExactAlarm) {
-      const canSchedule = await NativeModules.ExactAlarm.canSchedule();
-      if (!canSchedule) {
-        console.warn('[notifications] Exact alarms not allowed — opening settings');
-        NativeModules.ExactAlarm.openSettings();
-      }
-    }
-  } catch (e) {
-    // Module not available (Expo Go, older Android)
-  }
 }
 
 export async function requestPermissions() {
@@ -144,29 +95,13 @@ export async function registerForPushNotifications(registerFn) {
 
 export async function scheduleNotification(seconds, title, body) {
   const n = N();
-  if (!n) {
-    console.warn('[notifications] Module not available');
-    return null;
-  }
+  if (!n) return null;
   try {
-    const fireAt = new Date(Date.now() + seconds * 1000);
-    const id = await n.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        sound: true,
-        channelId: 'timers',
-      },
-      trigger: {
-        type: n.SchedulableTriggerInputTypes?.DATE ?? 'date',
-        date: fireAt,
-        channelId: 'timers',
-      },
+    return await n.scheduleNotificationAsync({
+      content: { title, body, sound: true },
+      trigger: { seconds },
     });
-    console.log(`[notifications] Scheduled "${title}" in ${seconds}s → ${id}`);
-    return id;
-  } catch (e) {
-    console.warn('[notifications] scheduleNotification failed:', e?.message || e);
+  } catch {
     return null;
   }
 }
@@ -174,19 +109,6 @@ export async function scheduleNotification(seconds, title, body) {
 export async function cancelNotification(id) {
   const n = N();
   if (n && id) {
-    try {
-      await n.cancelScheduledNotificationAsync(id);
-      await n.dismissNotificationAsync(id);
-    } catch {}
-  }
-}
-
-export async function cancelAllNotifications() {
-  const n = N();
-  if (n) {
-    try {
-      await n.cancelAllScheduledNotificationsAsync();
-      await n.dismissAllNotificationsAsync();
-    } catch {}
+    try { await n.cancelScheduledNotificationAsync(id); } catch {}
   }
 }

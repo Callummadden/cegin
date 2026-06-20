@@ -25,7 +25,7 @@ import { ToastProvider } from './src/components/Toast';
 import { AiProvider } from './src/aiContext';
 import { TimerProvider } from './src/timerContext';
 import GlobalTimerBar from './src/components/GlobalTimerBar';
-import { registerForPushNotifications, initNotifications } from './src/notifications';
+import { registerForPushNotifications } from './src/notifications';
 import { api } from './src/api';
 import { connect as wsConnect, disconnect as wsDisconnect, initAppStateListener, removeAppStateListener } from './src/wsSync';
 
@@ -63,7 +63,7 @@ function AppNavigator({ initialRoute }) {
           <Stack.Screen name="ScanRecipe" component={ScanRecipeScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="Assistant" component={AssistantScreen} />
-          <Stack.Screen name="CookMode" component={CookModeScreen} options={{ unmountOnBlur: false }} />
+          <Stack.Screen name="CookMode" component={CookModeScreen} />
           <Stack.Screen name="ShoppingList" component={ShoppingListScreen} />
           <Stack.Screen name="MealPlanner" component={MealPlannerScreen} />
           <Stack.Screen name="Stats" component={StatsScreen} />
@@ -83,9 +83,6 @@ export default function App() {
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
-    // Initialize notification handler + channel immediately (before any timer starts)
-    initNotifications().catch(() => {});
-
     const sub = AppState.addEventListener('change', (next) => {
       if (appState.current.match(/active/) && next.match(/inactive|background/)) {
         // Free image memory cache when app backgrounds
