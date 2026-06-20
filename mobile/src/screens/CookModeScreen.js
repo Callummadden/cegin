@@ -17,6 +17,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
 import { createAudioPlayer } from 'expo-audio';
 import { requestPermissions, scheduleNotification, cancelNotification } from '../notifications';
+import { useTimers } from '../timerContext';
 import { MONO, useTheme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api';
@@ -108,7 +109,7 @@ export default function CookModeScreen({ route, navigation }) {
   const activeSteps = stepOverrides || originalRecipe.steps || [];
   const len = activeSteps.length;
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(route.params?.step ?? 0);
   // Panel state
   const [panel, setPanel] = useState(null);
   const [showCongrats, setShowCongrats] = useState(false);
@@ -127,10 +128,8 @@ export default function CookModeScreen({ route, navigation }) {
   const [adjustResult, setAdjustResult] = useState(null);
   const [adjustError, setAdjustError] = useState(null);
 
-  // ─── Multi-timer state ───────────────────────────────────────
-  // Map of timerId -> { left, total, running, done, label }
-  const [timers, setTimers] = useState({});
-  const intervalRef = useRef(null);
+  // ─── Multi-timer state (from global context) ─────────────────
+  const { timers, startTimer, pauseTimer, resumeTimer, cancelTimer, setActiveRecipe, setActiveStep } = useTimers();
   // Track which timers we already spoke on, so we don't repeat
   const spokeRef = useRef(new Set());
   const vibratingRef = useRef({}); // { [timerId]: intervalId }
@@ -141,56 +140,19 @@ export default function CookModeScreen({ route, navigation }) {
   // All timer mentions in the current step
   const detectedTimers = useMemo(() => findAllTimers(currentStep), [currentStep]);
 
+  // ─── Register active recipe for global timer bar ──────────────
+  useEffect(() => {
+    setActiveRecipe(originalRecipe);
+  }, [originalRecipe]);
+
+  // ─── Sync current step to timer context ──────────────────────
+  useEffect(() => {
+    setActiveStep(ci);
+  }, [ci]);
+
   // ─── Request notification permissions ─────────────────────────
   useEffect(() => {
     requestPermissions();
-  }, []);
-
-  // ─── Background time detection + notifications ───────────────
-  const backgroundAt = useRef(Date.now());
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background') backgroundAt.current = Date.now();
-      else if (state === 'active') {
-        const elapsed = Math.floor((Date.now() - backgroundAt.current) / 1000);
-        if (elapsed > 2) {
-          setTimers((prev) => {
-            const next = { ...prev };
-            for (const [id, t] of Object.entries(prev)) {
-              if (!t.running) continue;
-              const left = t.left - elapsed;
-              if (left <= 0) next[id] = { ...t, left: 0, running: false, done: true };
-              else next[id] = { ...t, left };
-            }
-            return next;
-          });
-        }
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
-  // ─── Tick all running timers every second ────────────────────
-  useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      setTimers((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        for (const [id, t] of Object.entries(prev)) {
-          if (!t.running || t.left <= 0) continue;
-          changed = true;
-          const left = t.left - 1;
-          if (left <= 0) {
-            next[id] = { ...t, left: 0, running: false, done: true };
-          } else {
-            next[id] = { ...t, left };
-          }
-        }
-        return changed ? next : prev;
-      });
-    }, 1000);
-    return () => clearInterval(intervalRef.current);
   }, []);
 
   // ─── Vibrate when a timer finishes ───────────────────────────
@@ -223,62 +185,40 @@ export default function CookModeScreen({ route, navigation }) {
     };
   }, []);
 
-  // ─── Timer actions ───────────────────────────────────────────
-  const startTimer = useCallback(async (timerId, minutes, label) => {
-    spokeRef.current.delete(timerId);
-    const seconds = minutes * 60;
-    const notifId = await scheduleNotification(seconds, 'Timer Done!', `${label || minutes + ' min'} is finished.`);
-    setTimers((prev) => ({
-      ...prev,
-      [timerId]: { left: seconds, total: seconds, running: true, done: false, label: label || `${minutes} min`, notifId },
-    }));
-  }, []);
+  // ─── Timer actions (startTimer takes seconds via context) ────
+  const startTimerFromStep = useCallback(async (timerId, minutes, label) => {
+    await startTimer(timerId, minutes * 60, label || `${minutes} min`);
+  }, [startTimer]);
 
-  const pauseTimer = useCallback((timerId) => {
-    setTimers((prev) => {
-      const t = prev[timerId];
-      if (!t) return prev;
-      cancelNotification(t.notifId);
-      return { ...prev, [timerId]: { ...t, running: false, notifId: null } };
-    });
-  }, []);
-
-  const resumeTimer = useCallback((timerId) => {
-    setTimers((prev) => {
-      const t = prev[timerId];
-      if (!t) return prev;
-      scheduleNotification(t.left, 'Timer Done!', `${t.label} is finished.`).then((nid) => {
-        setTimers((p) => {
-          const cur = p[timerId];
-          if (!cur) return p;
-          return { ...p, [timerId]: { ...cur, notifId: nid } };
-        });
-      });
-      return { ...prev, [timerId]: { ...t, running: true } };
-    });
-  }, []);
-
-  const cancelTimer = useCallback((timerId) => {
-    if (vibratingRef.current[timerId]) {
-      Vibration.cancel();
-      vibratingRef.current[timerId]?.release?.();
-      delete vibratingRef.current[timerId];
+  // ─── Vibrate when a timer finishes ───────────────────────────
+  useEffect(() => {
+    for (const [id, t] of Object.entries(timers)) {
+      if (t.done && !spokeRef.current.has(id)) {
+        spokeRef.current.add(id);
+        Vibration.vibrate([500, 200, 500, 200], true);
+        const player = createAudioPlayer(require('../../assets/timer-alarm.wav'));
+        player.loop = true;
+        player.play();
+        vibratingRef.current[id] = player;
+      }
+      // Stop vibration when timer is no longer done (reset/deleted)
+      if (!t.done && vibratingRef.current[id]) {
+        Vibration.cancel();
+        vibratingRef.current[id]?.release?.();
+        delete vibratingRef.current[id];
+      }
     }
-    spokeRef.current.delete(timerId);
-    setTimers((prev) => {
-      const t = prev[timerId];
-      if (t?.notifId) cancelNotification(t.notifId);
-      const next = { ...prev };
-      delete next[timerId];
-      return next;
-    });
-  }, []);
+  }, [timers]);
 
-  // Active (running or paused, not yet done) timers for the floating bar
-  const activeTimers = useMemo(
-    () => Object.entries(timers),
-    [timers],
-  );
+  // Cleanup vibration on unmount
+  useEffect(() => {
+    return () => {
+      for (const player of Object.values(vibratingRef.current)) {
+        player?.release?.();
+      }
+      Vibration.cancel();
+    };
+  }, []);
 
   const progress = Math.round(((ci + 1) / len) * 100);
 
@@ -395,89 +335,9 @@ export default function CookModeScreen({ route, navigation }) {
     ? (panicSelected.length > 0 || panicText.trim().length > 0)
     : (adjustSelected.length > 0 || adjustText.trim().length > 0);
 
-  // ─── Render step text with inline timer chips ────────────────
+  // ─── Render step text (plain, no inline timer chips) ──────────
   const renderStepWithChips = () => {
-    if (detectedTimers.length === 0) {
-      return <Text style={[styles.stepText, { color: colors.text }]}>{currentStep}</Text>;
-    }
-
-    const parts = [];
-    let lastIdx = 0;
-    detectedTimers.forEach((dt, i) => {
-      // Text before this match
-      if (dt.index > lastIdx) {
-        parts.push(
-          <Text key={`t${i}`} style={[styles.stepText, { color: colors.text }]}>
-            {currentStep.slice(lastIdx, dt.index)}
-          </Text>,
-        );
-      }
-      // The matched text itself
-      parts.push(
-        <Text key={`m${i}`} style={[styles.stepText, { color: colors.text }]}>
-          {currentStep.slice(dt.index, dt.index + dt.length)}
-        </Text>,
-      );
-      // Timer chip
-      const timerId = `${ci}-${i}`;
-      const runningTimer = timers[timerId];
-      const chipLabel = runningTimer
-        ? (runningTimer.done ? '✓ Done' : runningTimer.running ? fmtClock(runningTimer.left) : fmtClock(runningTimer.left) + ' ⏸')
-        : `⏱ ${dt.minutes}m`;
-
-      parts.push(
-        <Pressable
-          key={`c${i}`}
-          style={[
-            styles.timerChip,
-            {
-              borderColor: runningTimer?.running ? colors.primary
-                : runningTimer?.done ? colors.success
-                : colors.border,
-              backgroundColor: runningTimer?.running ? 'rgba(255,90,38,0.15)'
-                : runningTimer?.done ? 'rgba(123,196,127,0.15)'
-                : 'transparent',
-            },
-          ]}
-          onPress={() => {
-            if (!runningTimer) {
-              startTimer(timerId, dt.minutes, dt.match);
-            } else if (runningTimer.done) {
-              startTimer(timerId, dt.minutes, dt.match);
-            } else if (runningTimer.running) {
-              pauseTimer(timerId);
-            } else {
-              resumeTimer(timerId);
-            }
-          }}
-        >
-          <Text
-            style={[
-              styles.timerChipText,
-              {
-                fontFamily: MONO,
-                color: runningTimer?.running ? colors.primary
-                  : runningTimer?.done ? colors.success
-                  : colors.textMuted,
-              },
-            ]}
-          >
-            {chipLabel}
-          </Text>
-        </Pressable>,
-      );
-      lastIdx = dt.index + dt.length;
-    });
-    // Remaining text after last match
-    if (lastIdx < currentStep.length) {
-      parts.push(
-        <Text key="tail" style={[styles.stepText, { color: colors.text }]}>
-          {currentStep.slice(lastIdx)}
-        </Text>,
-      );
-    }
-
-    return <Text style={[styles.stepText, { color: colors.text }]}>{parts}</Text>;
+    return <Text style={[styles.stepText, { color: colors.text }]}>{currentStep}</Text>;
   };
 
   if (!len) {
@@ -495,47 +355,8 @@ export default function CookModeScreen({ route, navigation }) {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
 
-      {/* ─── Floating timer bar ─────────────────────────────── */}
-      {activeTimers.length > 0 && (
-        <View style={[styles.floatingBar, { paddingTop: insets.top + 6, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.floatingBarInner}>
-            {activeTimers.map(([id, t]) => (
-              <View key={id} style={[styles.floatingTimerPill, { borderColor: t.running ? colors.primary : colors.border }]}>
-                <Text style={[styles.floatingTimerLabel, { fontFamily: MONO, color: colors.textMuted }]} numberOfLines={1}>
-                  {t.label}
-                </Text>
-                <Text style={[styles.floatingTimerClock, { fontFamily: MONO, color: t.done ? colors.success : colors.text }]}>
-                  {fmtClock(t.left)}
-                </Text>
-                <View style={styles.floatingTimerActions}>
-                  {t.done ? (
-                    <Pressable onPress={() => cancelTimer(id)} style={styles.floatingActionBtn}>
-                      <Text style={[styles.floatingActionText, { color: colors.textMuted }]}>✕</Text>
-                    </Pressable>
-                  ) : (
-                    <>
-                      <Pressable
-                        onPress={() => (t.running ? pauseTimer(id) : resumeTimer(id))}
-                        style={styles.floatingActionBtn}
-                      >
-                        <Text style={[styles.floatingActionText, { color: colors.primary }]}>
-                          {t.running ? '⏸' : '▶'}
-                        </Text>
-                      </Pressable>
-                      <Pressable onPress={() => cancelTimer(id)} style={styles.floatingActionBtn}>
-                        <Text style={[styles.floatingActionText, { color: colors.textMuted }]}>✕</Text>
-                      </Pressable>
-                    </>
-                  )}
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
       {/* Header */}
-      <View style={[styles.header, { paddingTop: 16 + insets.top + (activeTimers.length > 0 ? 56 : 0) }]}>
+      <View style={[styles.header, { paddingTop: 16 + insets.top + (Object.keys(timers).length > 0 ? 44 : 0) }]}>
         <Pressable style={[styles.closeBtn, { borderColor: colors.border }]} onPress={() => navigation.goBack()}>
           <Text style={[styles.closeBtnText, { color: colors.textMuted }]}>✕</Text>
         </Pressable>
@@ -580,7 +401,7 @@ export default function CookModeScreen({ route, navigation }) {
                 </Text>
                 <Pressable
                   style={[styles.timerBtn, { borderColor: colors.primary }]}
-                  onPress={() => startTimer(timerId, dt.minutes, dt.match)}
+                  onPress={() => startTimerFromStep(timerId, dt.minutes, dt.match)}
                 >
                   <Text style={[styles.timerBtnText, { fontFamily: MONO, color: colors.primary }]}>
                     START TIMER
@@ -643,19 +464,21 @@ export default function CookModeScreen({ route, navigation }) {
       {/* AI action bar + panel — hidden when AI disabled */}
       {!noAI && (
       <>
-      <View style={[styles.aiBar, { paddingBottom: Math.max(insets.bottom, 10), borderTopColor: colors.border }]}>
+      <View style={[styles.aiBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <View style={[styles.aiBarPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Pressable
-            style={[styles.panicBtn, { backgroundColor: '#DC2626' }]}
+            style={[styles.panicBtn, { backgroundColor: '#DC2626', borderColor: '#DC2626' }]}
             onPress={() => openPanel('panic')}
           >
             <Text style={styles.panicBtnText}>🔥 SOMETHING'S WRONG</Text>
           </Pressable>
           <Pressable
-            style={[styles.adjustBtn, { borderColor: colors.primary }]}
+            style={[styles.adjustBtn, { borderColor: colors.border, backgroundColor: colors.background }]}
             onPress={() => openPanel('adjust')}
           >
             <Text style={[styles.adjustBtnText, { fontFamily: MONO, color: colors.primary }]}>⚙ ADJUST</Text>
           </Pressable>
+        </View>
       </View>
 
       {/* Panel Modal */}
@@ -893,17 +716,6 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   stepBody: { flex: 1, paddingHorizontal: s(24), paddingTop: s(14) },
   stepText: { fontSize: fs(26), lineHeight: fs(38), fontWeight: '500', letterSpacing: -0.2 },
 
-  // Inline timer chip (appears after each detected time in step text)
-  timerChip: {
-    borderWidth: 1.5,
-    borderRadius: s(8),
-    paddingHorizontal: s(8),
-    paddingVertical: s(3),
-    marginLeft: s(4),
-    alignSelf: 'center',
-  },
-  timerChipText: { fontSize: fs(13), fontWeight: '600', letterSpacing: 0.3 },
-
   // Legacy big timer card (fallback for single-timer steps)
   timerCard: {
     marginTop: s(28), borderWidth: 1.5, borderRadius: s(16), padding: s(20),
@@ -914,52 +726,51 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   timerBtn: { borderWidth: 1.5, borderRadius: s(8), paddingHorizontal: s(16), paddingVertical: s(10) },
   timerBtnText: { fontSize: fs(11), letterSpacing: 1 },
 
-  // Floating timer bar
-  floatingBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
-    borderBottomWidth: 1,
-    paddingBottom: s(6),
-  },
-  floatingBarInner: {
-    paddingHorizontal: s(12),
-    gap: s(8),
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  floatingTimerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderRadius: s(20),
-    paddingHorizontal: s(12),
-    paddingVertical: s(6),
-    gap: s(8),
-  },
-  floatingTimerLabel: { fontSize: fs(10), letterSpacing: 0.5, maxWidth: s(100) },
-  floatingTimerClock: { fontSize: fs(14), fontWeight: '700' },
-  floatingTimerActions: { flexDirection: 'row', gap: s(4), marginLeft: s(4) },
-  floatingActionBtn: { paddingHorizontal: s(4), paddingVertical: s(2) },
-  floatingActionText: { fontSize: fs(14) },
-
   awakeNote: { textAlign: 'center', paddingBottom: s(8), fontSize: fs(10), letterSpacing: 1 },
-  navRow: { flexDirection: 'row', gap: s(12), paddingHorizontal: s(20), paddingBottom: s(10) },
+  navRow: { flexDirection: 'row', gap: s(12), paddingHorizontal: s(20), paddingBottom: s(80) },
   prevBtn: { flex: 1, borderWidth: 1.5, borderRadius: s(12), paddingVertical: s(17), alignItems: 'center' },
   prevBtnText: { fontWeight: '900', fontSize: fs(14), letterSpacing: 1 },
   nextBtn: { flex: 1.4, borderRadius: s(12), paddingVertical: s(17), alignItems: 'center' },
   nextBtnText: { fontWeight: '900', fontSize: fs(14), letterSpacing: 1 },
 
-  // AI action bar
+  // AI action bar — floating pill like bottom nav
   aiBar: {
-    flexDirection: 'row', gap: s(10), paddingHorizontal: s(20), paddingTop: s(10), borderTopWidth: 1,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: s(40),
+    paddingTop: s(10),
+    zIndex: 10,
   },
-  panicBtn: { flex: 1.4, borderRadius: s(12), paddingVertical: s(14), alignItems: 'center', justifyContent: 'center' },
+  aiBarPill: {
+    flexDirection: 'row',
+    gap: s(10),
+    borderWidth: 1.5,
+    borderRadius: s(28),
+    paddingHorizontal: s(6),
+    paddingVertical: s(6),
+  },
+  panicBtn: {
+    flex: 1.4,
+    borderWidth: 1.5,
+    borderRadius: s(28),
+    paddingVertical: s(14),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
+  },
   panicImg: { width: s(64), height: s(64), borderRadius: s(8), marginBottom: s(4) },
   panicBtnText: { color: '#fff', fontWeight: '900', fontSize: fs(11), letterSpacing: 0.5 },
-  adjustBtn: { flex: 1, borderWidth: 1.5, borderRadius: s(12), paddingVertical: s(14), alignItems: 'center' },
+  adjustBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: s(28),
+    paddingVertical: s(14),
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+  },
   adjustBtnText: { fontWeight: '900', fontSize: fs(12), letterSpacing: 1 },
 
   // Modal

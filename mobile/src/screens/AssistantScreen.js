@@ -20,9 +20,9 @@ import { MONO, useTheme } from '../theme';
 import Markdown from '../components/Markdown';
 import AppModal from '../components/AppModal';
 import { getChatHistory, saveConversation, deleteConversation, formatRelativeTime } from '../chatHistory';
-import { getMealPlan, MEALS } from '../mealPlan';
+import { getMealPlan, MEALS, setMeal } from '../mealPlan';
 import { getDietaryProfiles } from '../dietProfiles';
-import { getShoppingList } from '../shoppingList';
+import { getShoppingList, addItems as addShoppingItems } from '../shoppingList';
 import { getCookbook } from '../cookbook';
 import { getStats, getTopRecipes } from '../stats';
 import BottomNav from '../components/BottomNav';
@@ -219,7 +219,19 @@ function looksLikeRecipe(text) {
 
 const MessageBubble = memo(function MessageBubble({ item, index, colors, speakingMsgIdx, speakMessage, onSaveRecipe, savingRecipe, userRecipes, onNavigateRecipe, styles }) {
   const isUser = item.role === 'user';
-  const showSaveBtn = !isUser && looksLikeRecipe(item.content);
+  const isSystem = item.role === 'system';
+  const showSaveBtn = !isUser && !isSystem && looksLikeRecipe(item.content);
+
+  // System messages (action results)
+  if (isSystem) {
+    return (
+      <View style={[styles.bubbleRow, { justifyContent: 'center' }]}>
+        <View style={[styles.systemBubble, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+          <Text style={[styles.systemText, { color: colors.text2 }]}>{item.content}</Text>
+        </View>
+      </View>
+    );
+  }
 
   // Find matching saved recipes mentioned in Terry's message
   const matchedRecipes = [];
@@ -483,6 +495,60 @@ export default function AssistantScreen({ navigation, route }) {
     setFollowUps([...s].slice(0, 3));
   };
 
+  // ─── Execute actions from Terry's response ─────────────────────
+  const executeActions = async (reply) => {
+    const actionRegex = /```action\s*\n?([\s\S]*?)```/g;
+    const results = [];
+    let match;
+    while ((match = actionRegex.exec(reply)) !== null) {
+      try {
+        const action = JSON.parse(match[1].trim());
+        if (action.type === 'add_shopping' && Array.isArray(action.items)) {
+          await addShoppingItems(action.items);
+          results.push(`✅ Added ${action.items.length} item${action.items.length !== 1 ? 's' : ''} to shopping list: ${action.items.join(', ')}`);
+        } else if (action.type === 'add_meal' && action.day && action.recipe) {
+          // Find recipe by title
+          const recipes = await api.listRecipes().catch(() => []);
+          const found = recipes.find((r) => r.title.toLowerCase() === action.recipe.toLowerCase());
+          if (found) {
+            const dayOffset = getDayOffset(action.day);
+            const meal = action.meal || 'dinner';
+            await setMeal(dayOffset, meal, found.id);
+            results.push(`✅ Added "${found.title}" to ${action.day} ${meal}`);
+          } else {
+            results.push(`⚠️ Couldn't find recipe "${action.recipe}" in your collection`);
+          }
+        } else if (action.type === 'save_recipe' && action.title) {
+          await api.createRecipe({
+            title: action.title,
+            description: action.description || '',
+            ingredients: action.ingredients || [],
+            steps: action.steps || [],
+            tags: action.tags || [],
+            prep_minutes: action.prep_minutes || 0,
+            cook_minutes: action.cook_minutes || 0,
+            servings: action.servings || 4,
+          });
+          results.push(`✅ Saved recipe "${action.title}"`);
+        }
+      } catch (e) {
+        results.push(`⚠️ Action failed: ${e.message}`);
+      }
+    }
+    return results;
+  };
+
+  // Helper: convert day name to week offset
+  const getDayOffset = (dayName) => {
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const today = new Date().getDay();
+    const target = days.indexOf((dayName || '').toLowerCase());
+    if (target === -1) return 0;
+    let offset = target - today;
+    if (offset < 0) offset += 7;
+    return offset;
+  };
+
   // ─── Send message ───────────────────────────────────────────────────────
   const send = async (text) => {
     const content = (text || input).trim();
@@ -507,15 +573,28 @@ export default function AssistantScreen({ navigation, route }) {
       const profiles = await getDietaryProfiles().catch(() => []);
       const { reply } = await api.aiChat(next.filter((m) => m !== GREETING), profiles);
 
+      // Execute any actions Terry included in the response
+      const actionResults = await executeActions(reply);
+
+      // Strip action blocks from the displayed reply
+      let cleanReply = reply.replace(/```action\s*\n?[\s\S]*?```/g, '').trim();
+
       // 20% chance to append a fun food fact
-      let finalReply = reply;
+      let finalReply = cleanReply;
       if (Math.random() < 0.2) {
         const fact = pickRandom(TERRY_FACTS);
-        finalReply = reply + '\n\n' + fact;
+        finalReply = cleanReply + '\n\n' + fact;
         setTerryFact(fact);
       }
 
-      setMessages((cur) => [...cur, { role: 'assistant', content: finalReply, timestamp: Date.now() }]);
+      setMessages((cur) => {
+        const msgs = [...cur, { role: 'assistant', content: finalReply, timestamp: Date.now() }];
+        // Add action result messages
+        for (const result of actionResults) {
+          msgs.push({ role: 'system', content: result, timestamp: Date.now() });
+        }
+        return msgs;
+      });
       generateFollowUps(reply, content);
     } catch (e) {
       setError(e.message);
@@ -887,6 +966,14 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   bubble: { maxWidth: '85%', borderRadius: s(16), paddingHorizontal: s(15), paddingVertical: s(11) },
   userBubble: { borderBottomRightRadius: s(4) },
   aiBubble: { borderBottomLeftRadius: s(4) },
+  systemBubble: {
+    borderWidth: 1,
+    borderRadius: s(14),
+    paddingHorizontal: s(14),
+    paddingVertical: s(10),
+    maxWidth: '85%',
+  },
+  systemText: { fontSize: fs(12), fontFamily: MONO, letterSpacing: 0.3 },
   bubbleText: { fontSize: fs(14), lineHeight: fs(21) },
   bubbleMeta: { flexDirection: 'row', alignItems: 'center', marginTop: s(3), gap: s(8), paddingHorizontal: s(4) },
   saveRecipeBtn: {

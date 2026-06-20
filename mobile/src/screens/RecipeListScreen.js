@@ -26,6 +26,7 @@ import { getAppMode } from '../config';
 import { MONO, useTheme } from '../theme';
 import { isOnline as checkOnline, setOnline, getPendingChanges, syncPendingChanges, getCachedRecipesSync } from '../offlineCache';
 import { subscribe } from '../wsSync';
+import { useTimers } from '../timerContext';
 import { getFavorites, toggleFavorite } from '../favorites';
 import { getStats } from '../stats';
 import BottomNav from '../components/BottomNav';
@@ -99,6 +100,8 @@ export default function RecipeListScreen({ navigation }) {
   const [searchFocused, setSearchFocused] = useState(false);
   const clearingHistory = useRef(false);
   const { showToast } = useToast();
+  const { timers } = useTimers();
+  const activeTimerCount = Object.keys(timers).filter((id) => !timers[id].done).length;
 
   // Tutorial
   const [showTutorial, setShowTutorial] = useState(false);
@@ -401,25 +404,30 @@ export default function RecipeListScreen({ navigation }) {
     if (!menuRecipe) return;
     const recipe = menuRecipe;
     setMenuRecipe(null);
-    setModal({
-      title: 'Delete recipe',
-      message: `Delete "${recipe.title}"?`,
-      buttons: [
-        { text: 'CANCEL' },
-        {
-          text: 'DELETE',
-          destructive: true,
-          filled: true,
-          onPress: async () => {
-            try {
-              await api.deleteRecipe(recipe.id);
-              load(search);
-            } catch (e) {
-              showToast(`Delete failed: ${e.message}`);
-            }
-          },
-        },
-      ],
+
+    // Optimistic removal — instantly remove from list
+    const previousRecipes = recipes;
+    setRecipes((prev) => prev.filter((r) => r.id !== recipe.id));
+
+    showToast({
+      message: `Deleted "${recipe.title}"`,
+      actionLabel: 'UNDO',
+      duration: 5000,
+      onAction: async () => {
+        // Undo — restore the recipe to the server
+        try {
+          await api.createRecipe(recipe);
+          load(search);
+        } catch (e) {
+          showToast(`Undo failed: ${e.message}`);
+        }
+      },
+    });
+
+    // Delete from server in background
+    api.deleteRecipe(recipe.id).catch((e) => {
+      showToast(`Delete failed: ${e.message}`);
+      setRecipes(previousRecipes); // Rollback on failure
     });
   };
 
@@ -652,6 +660,9 @@ export default function RecipeListScreen({ navigation }) {
           <Text style={styles.wordmark}>
             CEGIN<Text style={{ color: colors.primary }}>.</Text>
           </Text>
+          <Text style={[styles.recipeCount, { fontFamily: MONO, color: colors.textMuted }]}>
+            {recipes.length} RECIPE{recipes.length !== 1 ? 'S' : ''}
+          </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Pressable
               style={styles.settingsBtn}
@@ -835,7 +846,7 @@ export default function RecipeListScreen({ navigation }) {
 
       {/* FAB */}
       <Pressable
-        style={[styles.fab, { backgroundColor: colors.primary }]}
+        style={[styles.fab, { backgroundColor: colors.primary, bottom: s(activeTimerCount >= 1 ? 160 : 100) }]}
         onPress={() => {
           setModal({
             title: 'Add Recipe',
@@ -1172,7 +1183,8 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.15)',
-    elevation: 8,
+    elevation: 20,
+    zIndex: 999,
     shadowColor: colors.primary,
     shadowOpacity: 0.4,
     shadowRadius: 12,

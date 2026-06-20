@@ -34,7 +34,7 @@ async function savePhoto(tempUri, sectionKey) {
 }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { api } from '../api';
+import { api, getServerUrl } from '../api';
 import { MONO, useTheme } from '../theme';
 import BottomNav from '../components/BottomNav';
 import AiDisclaimer from '../components/AiDisclaimer';
@@ -73,18 +73,42 @@ export default function TerryVisionScreen({ route, navigation }) {
     return migrated;
   };
 
-  // Load saved scans on focus
+  // Load saved scans on focus — server first, local fallback
   useFocusEffect(
     useMemo(() => () => {
       let cancelled = false;
       (async () => {
         try {
+          // Try loading from server
+          const serverScans = await api.getTerryVisionScans();
+          if (serverScans && serverScans.length > 0 && !cancelled) {
+            const serverUrl = await getServerUrl();
+            const grouped = {};
+            for (const s of serverScans) {
+              if (!grouped[s.section]) grouped[s.section] = [];
+              const photoUrl = s.imageUri && serverUrl ? `${serverUrl}${s.imageUri}` : s.imageUri;
+              grouped[s.section].push({
+                photo: photoUrl,
+                ingredients: s.ingredients,
+                loading: false,
+                error: null,
+                serverId: s.id,
+              });
+            }
+            setScans(grouped);
+            return;
+          }
+        } catch {
+          // Server offline — fall back to local
+        }
+
+        // Local fallback
+        try {
           const raw = await AsyncStorage.getItem(SCAN_KEY);
           if (raw) {
             const data = JSON.parse(raw);
-            const saved = data.scans || data; // backward compat
+            const saved = data.scans || data;
             const migrated = migrateScans(saved);
-            // Verify photos still exist
             const verified = {};
             for (const key in migrated) {
               const validScans = [];
@@ -260,6 +284,28 @@ export default function TerryVisionScreen({ route, navigation }) {
         // Server offline — items still saved locally
       }
 
+      // Upload photo + ingredients to server for cross-device sync
+      try {
+        const scanId = `tv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const serverResult = await api.uploadTerryVisionScan({
+          id: scanId,
+          section: sectionKey,
+          imageBase64: base64,
+          ingredients,
+        });
+        // Store server ID on the scan for later deletion
+        if (serverResult?.id) {
+          setScans((prev) => {
+            const arr = [...(prev[sectionKey] || [])];
+            const idx = arr.findIndex((s) => s.loading === false && s.ingredients === ingredients);
+            if (idx >= 0) arr[idx] = { ...arr[idx], serverId: serverResult.id };
+            return { ...prev, [sectionKey]: arr };
+          });
+        }
+      } catch {
+        // Server offline — photo saved locally only
+      }
+
       // Clear previous suggestions when new scan comes in
       setSuggestions(null);
       setSavedRecipes({});
@@ -278,7 +324,12 @@ export default function TerryVisionScreen({ route, navigation }) {
     }
   };
 
-  const removeScan = (sectionKey, scanIndex) => {
+  const removeScan = async (sectionKey, scanIndex) => {
+    const scan = scans[sectionKey]?.[scanIndex];
+    // Delete from server if it has a server ID
+    if (scan?.serverId) {
+      try { await api.deleteTerryVisionScan(scan.serverId); } catch {}
+    }
     setScans((prev) => {
       const arr = [...(prev[sectionKey] || [])];
       arr.splice(scanIndex, 1);

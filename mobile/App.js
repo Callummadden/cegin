@@ -23,6 +23,8 @@ import ScanRecipeScreen from './src/screens/ScanRecipeScreen';
 import { ThemeProvider, useTheme } from './src/theme';
 import { ToastProvider } from './src/components/Toast';
 import { AiProvider } from './src/aiContext';
+import { TimerProvider } from './src/timerContext';
+import GlobalTimerBar from './src/components/GlobalTimerBar';
 import { registerForPushNotifications } from './src/notifications';
 import { api } from './src/api';
 import { connect as wsConnect, disconnect as wsDisconnect, initAppStateListener, removeAppStateListener } from './src/wsSync';
@@ -46,29 +48,32 @@ function AppNavigator({ initialRoute }) {
   return (
     <NavigationContainer theme={navTheme}>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack.Navigator screenOptions={{
-        headerShown: false,
-        animation: 'fade',
-        cardStyle: { backgroundColor: colors.background },
-        unmountOnBlur: true,
-      }}
-        initialRouteName={initialRoute}
-      >
-        <Stack.Screen name="RecipeList" component={RecipeListScreen} />
-        <Stack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
-        <Stack.Screen name="EditRecipe" component={EditRecipeScreen} />
-        <Stack.Screen name="ScanRecipe" component={ScanRecipeScreen} />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="Assistant" component={AssistantScreen} />
-        <Stack.Screen name="CookMode" component={CookModeScreen} />
-        <Stack.Screen name="ShoppingList" component={ShoppingListScreen} />
-        <Stack.Screen name="MealPlanner" component={MealPlannerScreen} />
-        <Stack.Screen name="Stats" component={StatsScreen} />
-        <Stack.Screen name="Cookbook" component={CookbookScreen} />
-        <Stack.Screen name="TerryVision" component={TerryVisionScreen} />
-        <Stack.Screen name="Setup" component={SetupScreen} />
+      <View style={{ flex: 1 }}>
+        <Stack.Navigator screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+          cardStyle: { backgroundColor: colors.background },
+          unmountOnBlur: true,
+        }}
+          initialRouteName={initialRoute}
+        >
+          <Stack.Screen name="RecipeList" component={RecipeListScreen} />
+          <Stack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
+          <Stack.Screen name="EditRecipe" component={EditRecipeScreen} />
+          <Stack.Screen name="ScanRecipe" component={ScanRecipeScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Assistant" component={AssistantScreen} />
+          <Stack.Screen name="CookMode" component={CookModeScreen} />
+          <Stack.Screen name="ShoppingList" component={ShoppingListScreen} />
+          <Stack.Screen name="MealPlanner" component={MealPlannerScreen} />
+          <Stack.Screen name="Stats" component={StatsScreen} />
+          <Stack.Screen name="Cookbook" component={CookbookScreen} />
+          <Stack.Screen name="TerryVision" component={TerryVisionScreen} />
+          <Stack.Screen name="Setup" component={SetupScreen} />
 
-      </Stack.Navigator>
+        </Stack.Navigator>
+        <GlobalTimerBar />
+      </View>
     </NavigationContainer>
   );
 }
@@ -124,11 +129,13 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AiProvider>
+          <TimerProvider>
           <ToastProvider>
           <View style={{ flex: 1, backgroundColor: '#0E0E0E' }}>
             <AppNavigator initialRoute={initialRoute} />
           </View>
           </ToastProvider>
+          </TimerProvider>
         </AiProvider>
       </ThemeProvider>
     </SafeAreaProvider>

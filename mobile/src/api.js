@@ -591,6 +591,28 @@ export const api = {
     return request('/cookbook', { method: 'DELETE' });
   },
 
+  // Terry Vision scans
+  getTerryVisionScans: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/terry-vision/scans');
+  },
+  uploadTerryVisionScan: async ({ id, section, imageBase64, ingredients }) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/terry-vision/scans', { method: 'POST', body: JSON.stringify({ id, section, imageBase64, ingredients }) });
+  },
+  deleteTerryVisionScan: async (id) => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request(`/terry-vision/scans/${id}`, { method: 'DELETE' });
+  },
+  clearTerryVisionScans: async () => {
+    const mode = await getAppMode();
+    if (mode === 'local') return null;
+    return request('/terry-vision/scans', { method: 'DELETE' });
+  },
+
   // Shopping list
   getShoppingList: async () => {
     const mode = await getAppMode();

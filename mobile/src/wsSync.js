@@ -13,6 +13,9 @@ let reconnectTimer = null;
 let reconnectDelay = 1000; // starts at 1s, doubles up to 30s
 let intentionalClose = false;
 let appStateSub = null;
+let pingInterval = null;
+let pongTimeout = null;
+let lastPong = 0;
 
 // Subscribers: Map<type, Set<callback>>
 const subscribers = new Map();
@@ -20,18 +23,54 @@ const subscribers = new Map();
 // ── Cache clearing map ─────────────────────────────────────────────────────
 
 const cacheClearers = {
-  recipes: null, // handled by offlineCache._recipesCache — cleared via api.listRecipes forceRefresh
+  recipes: null,
   shopping_list: clearShoppingCache,
   meal_plan: clearMealPlanCache,
   cookbook: clearCookbookCache,
   stats: clearStatsCache,
   dietary_profiles: clearDietCache,
-  favorites: null,   // no in-memory cache
-  chat_history: null, // no in-memory cache
-  collections: null,  // part of recipes
-  activity_context: clearDietCache, // activity context is in dietProfiles module
-  scanned_items: null, // no client cache
+  favorites: null,
+  chat_history: null,
+  collections: null,
+  activity_context: clearDietCache,
+  scanned_items: null,
+  terry_vision: null,
 };
+
+// ── Debounce helper ────────────────────────────────────────────────────────
+
+const pendingCallbacks = new Map(); // type -> timer
+
+function debouncedNotify(type, action) {
+  // Clear existing timer for this type
+  const existing = pendingCallbacks.get(type);
+  if (existing) clearTimeout(existing);
+
+  // Schedule callback after 150ms of quiet
+  pendingCallbacks.set(type, setTimeout(() => {
+    pendingCallbacks.delete(type);
+
+    // Clear the relevant in-memory cache
+    const clearer = cacheClearers[type];
+    if (clearer) clearer();
+
+    // Notify subscribers for this type
+    const subs = subscribers.get(type);
+    if (subs) {
+      for (const cb of subs) {
+        try { cb(action); } catch (e) { console.error('[WS] Subscriber error:', e); }
+      }
+    }
+
+    // Also notify wildcard subscribers
+    const wildcardSubs = subscribers.get('*');
+    if (wildcardSubs) {
+      for (const cb of wildcardSubs) {
+        try { cb(type, action); } catch (e) { console.error('[WS] Wildcard subscriber error:', e); }
+      }
+    }
+  }, 150));
+}
 
 // ── Connect / disconnect ───────────────────────────────────────────────────
 
@@ -42,12 +81,19 @@ export async function connect() {
   const baseUrl = await getServerUrl();
   if (!baseUrl) return;
 
-  // Convert http:// or https:// to ws:// or wss://
   const wsUrl = baseUrl.replace(/^http/, 'ws') + '/ws';
 
-  if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
-    return; // Already connected or connecting
+  // Already connected and alive — skip
+  if (ws && ws.readyState === 1 && (Date.now() - lastPong) < 30000) {
+    return;
   }
+
+  // Force close any existing stale connection
+  if (ws) {
+    try { ws.close(); } catch {}
+    ws = null;
+  }
+  stopPing();
 
   intentionalClose = false;
 
@@ -56,49 +102,41 @@ export async function connect() {
 
     ws.onopen = () => {
       console.log('[WS] Connected to', wsUrl);
-      reconnectDelay = 1000; // Reset backoff on successful connection
+      reconnectDelay = 1000;
+      lastPong = Date.now();
+      startPing();
     };
 
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+
+        // Pong response from server
+        if (msg.type === 'pong') {
+          lastPong = Date.now();
+          if (pongTimeout) { clearTimeout(pongTimeout); pongTimeout = null; }
+          return;
+        }
+
         const { type, action } = msg;
         console.log('[WS] Received:', type, action);
-
-        // Clear the relevant in-memory cache
-        const clearer = cacheClearers[type];
-        if (clearer) clearer();
-
-        // Notify subscribers for this type
-        const subs = subscribers.get(type);
-        if (subs) {
-          for (const cb of subs) {
-            try { cb(action); } catch (e) { console.error('[WS] Subscriber error:', e); }
-          }
-        }
-
-        // Also notify wildcard subscribers (listen to all events)
-        const wildcardSubs = subscribers.get('*');
-        if (wildcardSubs) {
-          for (const cb of wildcardSubs) {
-            try { cb(type, action); } catch (e) { console.error('[WS] Wildcard subscriber error:', e); }
-          }
-        }
+        debouncedNotify(type, action);
       } catch (e) {
         console.error('[WS] Failed to parse message:', e);
       }
     };
 
-    ws.onclose = () => {
-      console.log('[WS] Disconnected');
+    ws.onclose = (event) => {
+      console.log('[WS] Disconnected', event.code, event.reason);
       ws = null;
+      stopPing();
       if (!intentionalClose) {
         scheduleReconnect();
       }
     };
 
     ws.onerror = () => {
-      // onclose fires after this with the real error info — handled there
+      // onclose fires after this with the real error info
     };
   } catch (e) {
     console.error('[WS] Connection failed:', e.message);
@@ -108,19 +146,63 @@ export async function connect() {
 
 export function disconnect() {
   intentionalClose = true;
+  stopPing();
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
   if (ws) {
-    ws.close();
+    try { ws.close(); } catch {}
     ws = null;
   }
 }
 
+// ── Ping/pong keepalive ────────────────────────────────────────────────────
+
+function startPing() {
+  stopPing();
+  pingInterval = setInterval(() => {
+    if (!ws || ws.readyState !== 1) {
+      stopPing();
+      return;
+    }
+
+    // Send ping
+    try {
+      ws.send(JSON.stringify({ type: 'ping' }));
+    } catch {
+      // Connection is dead
+      console.log('[WS] Ping send failed — reconnecting');
+      stopPing();
+      try { ws.close(); } catch {}
+      ws = null;
+      scheduleReconnect();
+      return;
+    }
+
+    // If no pong within 10s, connection is dead
+    pongTimeout = setTimeout(() => {
+      const timeSinceLastPong = Date.now() - lastPong;
+      if (timeSinceLastPong > 15000) {
+        console.log('[WS] No pong for ' + Math.round(timeSinceLastPong / 1000) + 's — reconnecting');
+        stopPing();
+        if (ws) { try { ws.close(); } catch {} ws = null; }
+        scheduleReconnect();
+      }
+    }, 10000);
+  }, 15000); // Ping every 15s
+}
+
+function stopPing() {
+  if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+  if (pongTimeout) { clearTimeout(pongTimeout); pongTimeout = null; }
+}
+
+// ── Reconnect with backoff ─────────────────────────────────────────────────
+
 function scheduleReconnect() {
   if (intentionalClose) return;
-  if (reconnectTimer) return; // Already scheduled
+  if (reconnectTimer) return;
 
   console.log(`[WS] Reconnecting in ${reconnectDelay / 1000}s...`);
   reconnectTimer = setTimeout(() => {
@@ -144,7 +226,10 @@ export function initAppStateListener() {
     const isNowActive = nextState === 'active';
 
     if (wasBackground && isNowActive) {
-      // App came to foreground — reconnect if needed
+      // App came to foreground — force reconnect (drop stale connection)
+      console.log('[WS] App foregrounded — forcing reconnect');
+      if (ws) { try { ws.close(); } catch {} ws = null; }
+      stopPing();
       connect();
     }
 

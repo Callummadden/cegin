@@ -866,6 +866,78 @@ app.delete('/api/cookbook', (req, res) => {
   broadcast('cookbook', 'changed');
 });
 
+// --- Terry Vision Scans ---
+
+const TERRY_VISION_DIR = path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : '/data', 'uploads', 'terry-vision');
+fs.mkdirSync(TERRY_VISION_DIR, { recursive: true });
+
+app.use('/api/uploads/terry-vision', express.static(TERRY_VISION_DIR));
+
+// Get all scans for the current user
+app.get('/api/terry-vision/scans', (req, res) => {
+  const userId = req.user?.id || 0;
+  const rows = dbModule.getTerryVisionScans(userId);
+  res.json(rows.map(r => ({
+    id: r.id,
+    section: r.section,
+    imageUri: r.image_path ? `/api/uploads/terry-vision/${r.image_path}` : null,
+    ingredients: JSON.parse(r.ingredients || '[]'),
+    created_at: r.created_at,
+  })));
+});
+
+// Upload a scan photo and save scan data
+app.post('/api/terry-vision/scans', (req, res) => {
+  const userId = req.user?.id || 0;
+  const { id, section, imageBase64, ingredients } = req.body;
+  if (!section || !imageBase64) {
+    return res.status(400).json({ error: 'section and imageBase64 required' });
+  }
+  const scanId = id || `tv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const filename = `${scanId}.jpg`;
+  const filepath = path.join(TERRY_VISION_DIR, filename);
+  const buffer = Buffer.from(imageBase64, 'base64');
+  fs.writeFileSync(filepath, buffer);
+
+  const scan = dbModule.addTerryVisionScan(userId, {
+    id: scanId,
+    section,
+    imagePath: filename,
+    ingredients: ingredients || [],
+  });
+
+  res.status(201).json({
+    id: scan.id,
+    section: scan.section,
+    imageUri: `/api/uploads/terry-vision/${scan.image_path}`,
+    ingredients: JSON.parse(scan.ingredients || '[]'),
+    created_at: scan.created_at,
+  });
+  broadcast('terry_vision', 'changed');
+});
+
+// Delete a single scan
+app.delete('/api/terry-vision/scans/:id', (req, res) => {
+  const userId = req.user?.id || 0;
+  const scan = dbModule.deleteTerryVisionScan(userId, req.params.id);
+  if (scan?.image_path) {
+    fs.unlink(path.join(TERRY_VISION_DIR, scan.image_path), () => {});
+  }
+  res.json({ ok: true });
+  broadcast('terry_vision', 'changed');
+});
+
+// Clear all scans
+app.delete('/api/terry-vision/scans', (req, res) => {
+  const userId = req.user?.id || 0;
+  const scans = dbModule.clearTerryVisionScans(userId);
+  for (const s of scans) {
+    if (s.image_path) fs.unlink(path.join(TERRY_VISION_DIR, s.image_path), () => {});
+  }
+  res.json({ ok: true });
+  broadcast('terry_vision', 'changed');
+});
+
 // --- Shopping List ---
 
 app.get('/api/shopping-list', (req, res) => {
@@ -975,9 +1047,31 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws) => {
   console.log(`[WS] Client connected (${wss.clients.size} total)`);
+  ws.isAlive = true;
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong' }));
+      }
+    } catch {}
+  });
   ws.on('close', () => console.log(`[WS] Client disconnected (${wss.clients.size} total)`));
   ws.on('error', (err) => console.error('[WS] Error:', err.message));
+  ws.on('pong', () => { ws.isAlive = true; });
 });
+
+// Dead connection cleanup — every 30s
+setInterval(() => {
+  for (const client of wss.clients) {
+    if (client.isAlive === false) {
+      console.log('[WS] Terminating stale client');
+      client.terminate();
+    }
+    client.isAlive = false;
+    client.ping();
+  }
+}, 30000);
 
 /** Broadcast a change event to all connected clients. */
 function broadcast(type, action) {

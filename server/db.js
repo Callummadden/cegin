@@ -955,6 +955,48 @@ function clearActivityContext(userId) {
   db.prepare('DELETE FROM activity_context WHERE user_id = ?').run(uid);
 }
 
+// ─── Terry Vision Scans ─────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS terry_vision_scans (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    section TEXT NOT NULL,
+    image_path TEXT NOT NULL,
+    ingredients TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+function getTerryVisionScans(userId) {
+  const uid = userId || 0;
+  return db.prepare('SELECT * FROM terry_vision_scans WHERE user_id = ? ORDER BY created_at ASC').all(uid);
+}
+
+function addTerryVisionScan(userId, { id, section, imagePath, ingredients }) {
+  const uid = userId || 0;
+  db.prepare('INSERT INTO terry_vision_scans (id, user_id, section, image_path, ingredients) VALUES (?, ?, ?, ?, ?)').run(
+    id, uid, section, imagePath, JSON.stringify(ingredients || [])
+  );
+  return db.prepare('SELECT * FROM terry_vision_scans WHERE id = ?').get(id);
+}
+
+function deleteTerryVisionScan(userId, scanId) {
+  const uid = userId || 0;
+  const scan = db.prepare('SELECT * FROM terry_vision_scans WHERE id = ? AND user_id = ?').get(scanId, uid);
+  if (scan) {
+    db.prepare('DELETE FROM terry_vision_scans WHERE id = ?').run(scanId);
+  }
+  return scan;
+}
+
+function clearTerryVisionScans(userId) {
+  const uid = userId || 0;
+  const scans = db.prepare("SELECT image_path FROM terry_vision_scans WHERE user_id = ? AND image_path != ''").all(uid);
+  db.prepare('DELETE FROM terry_vision_scans WHERE user_id = ?').run(uid);
+  return scans;
+}
+
 // Get all users who have notification subscriptions with push tokens
 function getSubscribedUsers() {
   return db.prepare(`
@@ -1000,6 +1042,8 @@ module.exports = {
   getChatHistory, syncChatHistory, clearChatHistory,
   // Activity context
   getActivityContext, syncActivityContext, clearActivityContext,
+  // Terry Vision scans
+  getTerryVisionScans, addTerryVisionScan, deleteTerryVisionScan, clearTerryVisionScans,
   // Utils
   localDateStr,
 };
