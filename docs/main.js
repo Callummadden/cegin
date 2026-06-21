@@ -92,4 +92,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'Escape' && lightbox.classList.contains('open')) closeLightbox();
     });
   }
+
+  // Screenshot scroll arrows
+  const showcase = document.getElementById('screenshot-showcase');
+  if (showcase) {
+    const scrollAmount = 500;
+    document.querySelectorAll('[data-scroll]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const dir = parseInt(btn.dataset.scroll, 10);
+        showcase.scrollBy({ left: dir * scrollAmount, behavior: 'smooth' });
+      });
+    });
+  }
 });

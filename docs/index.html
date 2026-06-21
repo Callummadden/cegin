@@ -253,8 +253,10 @@
         <h2>Inside the app</h2>
         <p>Real screenshots from the Android app — recipe library, Chef Terry, meal planning, cook mode, and more.</p>
       </div>
-      <div class="screenshot-showcase">
-        <div class="screenshot-strip">
+      <div class="screenshot-showcase-wrap">
+        <button type="button" class="screenshot-arrow screenshot-arrow-left" aria-label="Scroll left" data-scroll="-1">‹</button>
+        <div class="screenshot-showcase" id="screenshot-showcase">
+          <div class="screenshot-strip">
           <figure class="screenshot-card">
             <button type="button" class="phone-frame" data-lightbox="assets/screenshots/recipe-library.jpg" aria-label="Enlarge recipe library screenshot">
               <img src="assets/screenshots/recipe-library.jpg" alt="Cegin recipe library showing recipe cards with photos, search bar, and category filters" width="1272" height="2640" loading="lazy" decoding="async">
@@ -322,6 +324,7 @@
             <figcaption>Kitchen Log</figcaption>
           </figure>
         </div>
+        <button type="button" class="screenshot-arrow screenshot-arrow-right" aria-label="Scroll right" data-scroll="1">›</button>
       </div>
       <p class="screenshot-note mono">Tap any screenshot to view full resolution.</p>
     </div>
