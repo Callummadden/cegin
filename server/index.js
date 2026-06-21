@@ -115,12 +115,12 @@ const bodyParser1mb = express.json({ limit: '1mb' });
 const bodyParser5mb = express.json({ limit: '5mb' });
 const bodyParser20mb = express.json({ limit: '20mb' });
 
-// S2-11: Single body parser middleware — 20mb for scan-fridge, 5mb for cookbook, 1mb for everything else
+// S2-11: Single body parser middleware — 20mb for scan-fridge, 5mb for cookbook and recipe save, 1mb for everything else
 app.use((req, res, next) => {
   if (req.path === '/api/ai/scan-fridge') {
     return bodyParser20mb(req, res, next);
   }
-  if (req.path.startsWith('/api/cookbook')) {
+  if (req.path.startsWith('/api/cookbook') || req.method === 'POST' && req.path === '/api/recipes' || req.method === 'PUT' && req.path.match(/^\/api\/recipes\/\d+$/)) {
     return bodyParser5mb(req, res, next);
   }
   bodyParser1mb(req, res, next);
@@ -476,6 +476,14 @@ app.post('/api/recipes', (req, res) => {
   if (!req.body.title || !req.body.title.trim()) {
     return res.status(400).json({ error: 'title is required' });
   }
+  // S2-13: Handle base64 image uploads from camera/gallery
+  if (req.body.image_url && req.body.image_url.startsWith('data:image')) {
+    const base64 = req.body.image_url.split(',')[1];
+    if (base64) {
+      const filename = saveBase64Image(base64, UPLOADS_DIR);
+      req.body.image_url = `/api/uploads/${filename}`;
+    }
+  }
   // S2-7: Pass userId for ownership
   res.status(201).json(createRecipe(req.body, req.user?.id));
   broadcast('recipes', 'changed');
@@ -484,6 +492,14 @@ app.post('/api/recipes', (req, res) => {
 app.put('/api/recipes/:id', (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid recipe ID' });
+  // S2-13: Handle base64 image uploads from camera/gallery
+  if (req.body.image_url && req.body.image_url.startsWith('data:image')) {
+    const base64 = req.body.image_url.split(',')[1];
+    if (base64) {
+      const filename = saveBase64Image(base64, UPLOADS_DIR);
+      req.body.image_url = `/api/uploads/${filename}`;
+    }
+  }
   // S2-7: Pass userId for ownership scoping
   const recipe = updateRecipe(id, req.body, req.user?.id);
   if (!recipe) return res.status(404).json({ error: 'Recipe not found' });

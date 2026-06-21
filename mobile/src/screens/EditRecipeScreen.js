@@ -12,6 +12,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { api } from '../api';
 import { invalidateRecipeAudits, invalidateRecipeNutrition, invalidateRecipePrep } from '../auditCache';
 import { MONO, useTheme } from '../theme';
@@ -157,6 +159,19 @@ export default function EditRecipeScreen({ route, navigation }) {
   const save = async () => {
     if (!title.trim()) { setModal({ title: 'Missing title', message: 'Give the recipe a name.', buttons: [{ text: 'OK', primary: true }] }); return; }
     const recipe = buildRecipe();
+    // S2-13: Convert local file:// images to base64 for server upload
+    if (recipe.image_url && (recipe.image_url.startsWith('file://') || recipe.image_url.startsWith('content://'))) {
+      try {
+        const info = await FileSystem.getInfoAsync(recipe.image_url);
+        if (info.exists) {
+          const manipulated = await manipulateAsync(recipe.image_url, [{ resize: { width: 1000 } }], { compress: 0.7, format: SaveFormat.JPEG });
+          const base64 = await FileSystem.readAsStringAsync(manipulated.uri, { encoding: FileSystem.EncodingType.Base64 });
+          recipe.image_url = `data:image/jpeg;base64,${base64}`;
+        }
+      } catch (e) {
+        console.warn('[EditRecipe] Failed to convert image to base64:', e.message);
+      }
+    }
     setSaving(true);
     try {
       if (existing) {
