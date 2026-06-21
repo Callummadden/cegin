@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 const Database = require('better-sqlite3');
 const path = require('path');
 
@@ -201,7 +204,7 @@ function searchByIngredients(ingredientList, userId) {
 db.exec(`
   CREATE TABLE IF NOT EXISTS collections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
     recipe_ids TEXT NOT NULL DEFAULT '[]',
     created_at TEXT DEFAULT (datetime('now'))
   )
@@ -210,6 +213,7 @@ db.exec(`
 // Migrate: add user_id column to collections
 for (const stmt of [
   `ALTER TABLE collections ADD COLUMN user_id INTEGER DEFAULT 0`, // S2-7
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_user_name ON collections(user_id, name)`, // Per-user unique names
 ]) {
   try {
     db.exec(stmt);
@@ -1002,12 +1006,14 @@ function getSubscribedUsers() {
     SELECT ns.*, u.email, u.display_name,
       GROUP_CONCAT(pt.token) as push_tokens_csv
     FROM notification_subscriptions ns
-    JOIN users u ON u.id = ns.user_id
+    LEFT JOIN users u ON u.id = ns.user_id
     LEFT JOIN push_tokens pt ON pt.user_id = ns.user_id
     GROUP BY ns.user_id
     HAVING push_tokens_csv IS NOT NULL
   `).all().map(row => ({
     ...row,
+    email: row.email || null,
+    display_name: row.display_name || null,
     push_tokens: row.push_tokens_csv ? row.push_tokens_csv.split(',') : [],
   }));
 }

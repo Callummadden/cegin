@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getServerUrl } from './config';

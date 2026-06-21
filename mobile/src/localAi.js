@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 import { getCustomAIConfig, getDeepSeekKey, getGoogleKey } from './config';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -344,9 +347,13 @@ ${recipeList}${dietNote}` },
   return extractJson(content);
 }
 
-export async function generateShoppingList(recipeIds) {
+export async function generateShoppingList(recipeIds, recipes) {
+  // If recipes are provided, send full ingredient lists; otherwise fall back to IDs only
+  const recipeData = Array.isArray(recipes) && recipes.length > 0
+    ? recipes.map(r => ({ id: r.id, title: r.title, ingredients: r.ingredients }))
+    : null;
   const content = await callTextModel(
-    [{ role: 'user', content: JSON.stringify({ recipe_ids: recipeIds }) }],
+    [{ role: 'user', content: JSON.stringify(recipeData ? { recipes: recipeData } : { recipe_ids: recipeIds }) }],
     { json: true }
   );
   return extractJson(content);

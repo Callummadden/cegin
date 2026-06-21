@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
 import {
   ActivityIndicator,
@@ -20,7 +23,7 @@ import { MONO, useTheme } from '../theme';
 import Markdown from '../components/Markdown';
 import AppModal from '../components/AppModal';
 import { getChatHistory, saveConversation, deleteConversation, formatRelativeTime } from '../chatHistory';
-import { getMealPlan, MEALS, setMeal } from '../mealPlan';
+import { getMealPlan, MEALS, setMeal, formatDate, getWeekStart } from '../mealPlan';
 import { getDietaryProfiles } from '../dietProfiles';
 import { getShoppingList, addItems as addShoppingItems } from '../shoppingList';
 import { getCookbook } from '../cookbook';
@@ -511,9 +514,12 @@ export default function AssistantScreen({ navigation, route }) {
           const recipes = await api.listRecipes().catch(() => []);
           const found = recipes.find((r) => r.title.toLowerCase() === action.recipe.toLowerCase());
           if (found) {
-            const dayOffset = getDayOffset(action.day);
+            const weekStart = getWeekStart(0);
+            const targetDate = new Date(weekStart);
+            targetDate.setDate(targetDate.getDate() + getDayOffset(action.day));
+            const dateKey = formatDate(targetDate);
             const meal = action.meal || 'dinner';
-            await setMeal(dayOffset, meal, found.id);
+            await setMeal(dateKey, meal, found.id);
             results.push(`✅ Added "${found.title}" to ${action.day} ${meal}`);
           } else {
             results.push(`⚠️ Couldn't find recipe "${action.recipe}" in your collection`);

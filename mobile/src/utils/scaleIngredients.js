@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 // Parse and scale ingredient quantities.
 // "2 cups flour" × 2 → "4 cups flour"
 // "1/2 tsp salt" × 2 → "1 tsp salt"

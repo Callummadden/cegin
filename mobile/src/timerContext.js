@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { AppState } from 'react-native';
 

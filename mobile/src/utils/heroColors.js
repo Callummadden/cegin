@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 // Theme-aware hero placeholder colors for recipe cards
 
 // Blend two hex colors (0-1 ratio toward b)

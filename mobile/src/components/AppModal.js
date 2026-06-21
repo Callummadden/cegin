@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function AppModal({ visible, title, message, buttons, colors, onClose }) {

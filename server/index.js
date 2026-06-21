@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -27,6 +30,8 @@ const dbModule = require('./db');
 const { startCron } = require('./cron');
 const { sendPush } = require('./notifications');
 const crypto = require('crypto');
+const net = require('net');
+const dns = require('dns').promises;
 const { WebSocketServer } = require('ws');
 
 const app = express();
@@ -138,8 +143,8 @@ app.use('/api', (req, res, next) => {
 // Also returns version info so the client can check if it's outdated
 const SERVER_VERSION = require('./package.json').version;
 const MIN_CLIENT_VERSION = '1.1.5';    // oldest client that works with this server
-const LATEST_CLIENT_VERSION = '1.2.0'; // newest published client
-const LATEST_SERVER_VERSION = '1.2.0'; // bump this when you release a new server
+const LATEST_CLIENT_VERSION = '1.3.0'; // newest published client
+const LATEST_SERVER_VERSION = '1.3.0'; // bump this when you release a new server
 app.get('/api/health', (req, res) => res.json({
   ok: true,
   serverVersion: SERVER_VERSION,
@@ -177,6 +182,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', authMiddleware(dbModule), (req, res) => {
   const u = req.user;
+  if (!u) return res.status(401).json({ error: 'Not authenticated' });
   res.json({ id: u.id, email: u.email, displayName: u.display_name });
 });
 
@@ -309,9 +315,15 @@ app.post('/api/ai/meal-plan', async (req, res) => {
   try {
     // S2-16: Pass req.user?.id to listRecipes for ownership scoping
     const userId = req.user?.id;
-    const recipes = listRecipes(undefined, userId);
-    const { activityContext, dietaryProfiles } = req.body || {};
-    const result = await ai.suggestMealPlan(recipes, { activityContext, dietaryProfiles, userId: req.user?.id });
+    const { activityContext, dietaryProfiles, goal, recipes: clientRecipes } = req.body || {};
+    let recipes;
+    if (Array.isArray(clientRecipes) && clientRecipes.length > 0) {
+      // Client provided specific recipes — use them directly
+      recipes = clientRecipes;
+    } else {
+      recipes = listRecipes(undefined, userId);
+    }
+    const result = await ai.suggestMealPlan(recipes, { activityContext, dietaryProfiles, goal, userId: req.user?.id });
     res.json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
@@ -384,6 +396,7 @@ app.post('/api/ai/nutrition', async (req, res) => {
   }
   try {
     const nutrition = await ai.estimateNutrition({ title, ingredients, servings });
+    res.json(nutrition);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
@@ -760,9 +773,42 @@ app.use('/api/uploads/cookbook', express.static(UPLOADS_DIR));
 const IMAGE_CACHE_DIR = path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, 'data'), 'uploads', 'image-cache');
 fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
 
-app.get('/api/image-proxy', bodyParser5mb, async (req, res) => {
+// SSRF protection helper — validate URL before proxying
+function isPrivateIP(ip) {
+  if (net.isIP(ip) === 4) {
+    const parts = ip.split('.').map(Number);
+    if (parts[0] === 127) return true;
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    return false;
+  }
+  if (net.isIP(ip) === 6) {
+    if (ip === '::1') return true;
+    if (/^(fc|fd)/i.test(ip)) return true;
+    if (/^fe80/i.test(ip)) return true;
+    return false;
+  }
+  return false;
+}
+
+app.get('/api/image-proxy', async (req, res) => {
   const { url, w } = req.query;
   if (!url) return res.status(400).json({ error: 'url required' });
+  // Validate URL scheme
+  let parsed;
+  try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+  if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(400).json({ error: 'Only http/https URLs allowed' });
+  // Resolve hostname and block private IPs
+  try {
+    const addrs = await dns.lookup(parsed.hostname, { all: true });
+    for (const a of addrs) {
+      if (isPrivateIP(a.address)) return res.status(400).json({ error: 'Private/local addresses not allowed' });
+    }
+  } catch (e) {
+    return res.status(400).json({ error: 'DNS lookup failed' });
+  }
   const width = Math.min(parseInt(w, 10) || 600, 1200);
 
   // Cache key based on url + width

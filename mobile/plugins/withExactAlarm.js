@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 const { withDangerousMod, withAndroidManifest } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 const { listRecipes } = require('./db');
 const { readSecret, readConfig } = require('./secrets');
 const dns = require('dns');
@@ -820,7 +823,7 @@ async function consolidateShoppingList(recipes) {
 
 // Suggests a 7-day meal plan (breakfast, lunch, dinner) using the user's saved recipes.
 // Optionally accepts biometric/activity context to skew recommendations.
-async function suggestMealPlan(recipes, { activityContext, dietaryProfiles, userId } = {}) {
+async function suggestMealPlan(recipes, { activityContext, dietaryProfiles, goal, userId } = {}) {
   if (!recipes.length) return { days: [] };
 
   const recipeSummary = recipes.map((r) => {
@@ -829,6 +832,9 @@ async function suggestMealPlan(recipes, { activityContext, dietaryProfiles, user
   });
 
   let contextBlock = '';
+  if (goal) {
+    contextBlock += '\n\nUSER GOAL: ' + goal + '\nOptimize the meal plan toward this goal (e.g., high-protein, balanced, low-carb, weight loss).';
+  }
   if (activityContext) {
     contextBlock +=
       '\n\nUSER ACTIVITY CONTEXT:\n' +
@@ -1142,7 +1148,8 @@ async function callVisionModel(imageBase64, prompt, { timeout = 30000, maxTokens
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || '[]';
     let ingredients; try { ingredients = JSON.parse(text); } catch { const m = text.match(/\[[\s\S]*\]/); ingredients = m ? JSON.parse(m[0]) : []; }
-    return { ingredients: Array.isArray(ingredients) ? ingredients : [] };
+    // Return as JSON string so callers can uniformly JSON.parse
+    return JSON.stringify(Array.isArray(ingredients) ? ingredients : []);
   }
 
   // Gemini
@@ -1173,7 +1180,8 @@ async function callVisionModel(imageBase64, prompt, { timeout = 30000, maxTokens
   }
 
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return text;
 }
 
 async function scanFridge(imageBase64) {
@@ -1238,6 +1246,7 @@ async function applySubstitutions(recipe, substitutions) {
 
 module.exports = {
   isConfigured,
+  isPrivateIP,
   chat,
   generateRecipe,
   importFromUrl,

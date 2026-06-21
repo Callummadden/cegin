@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 // notifications.expo.js
 // This file is automatically preferred by Expo Go (SDK 53+).
 // It contains NO native imports — keeps the app red-screen free.

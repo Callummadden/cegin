@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -649,7 +652,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
                         };
                       } else {
                         const r = await api.estimateNutrition({ title: recipe.title, ingredients: recipe.ingredients, servings: recipe.servings });
-                        result = { ...r.nutrition, source: 'ai' };
+                        result = { ...r, source: 'ai' };
                       }
                       setNutrition(result);
                       setCachedNutrition(recipe.id, recipe.updated_at, result);
@@ -681,7 +684,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
                         };
                       } else {
                         const r = await api.estimateNutrition({ title: recipe.title, ingredients: recipe.ingredients, servings: recipe.servings });
-                        result = { ...r.nutrition, source: 'ai' };
+                        result = { ...r, source: 'ai' };
                       }
                       setNutrition(result);
                       setCachedNutrition(recipe.id, recipe.updated_at, result);

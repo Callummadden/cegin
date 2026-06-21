@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   isOnline,
@@ -25,6 +28,9 @@ async function request(path, options = {}) {
     throw new Error('No server configured. Set the server URL in Settings.');
   }
   const headers = { 'Content-Type': 'application/json' };
+  // Attach auth token if available (optional — app works in open mode without auth)
+  const token = await AsyncStorage.getItem('cegin_auth_token').catch(() => null);
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   const controller = new AbortController();
   const isAI = path.startsWith('/ai/') || path.startsWith('/ai?');
   const timeout = isAI ? AI_REQUEST_TIMEOUT : REQUEST_TIMEOUT;
@@ -92,6 +98,43 @@ export function proxyImageUrlSync(url, width = 600) {
 
 // ── Sync pending changes ─────────────────────────────────────────────────────
 
+// Remap a temp offline ID to a real server ID across all local stores
+async function remapTempId(tempId, serverId) {
+  try {
+    // Update recipe cache
+    const raw = await AsyncStorage.getItem('cegin_recipe_cache');
+    if (raw) {
+      const map = JSON.parse(raw);
+      if (map[tempId]) {
+        map[serverId] = { ...map[tempId], id: serverId };
+        delete map[tempId];
+        await AsyncStorage.setItem('cegin_recipe_cache', JSON.stringify(map));
+      }
+    }
+    // Update meal plan references
+    const mealRaw = await AsyncStorage.getItem('cegin_meal_plan');
+    if (mealRaw) {
+      const plan = JSON.parse(mealRaw);
+      let changed = false;
+      for (const day in plan) {
+        for (const meal in plan[day]) {
+          if (plan[day][meal] === tempId) { plan[day][meal] = serverId; changed = true; }
+        }
+      }
+      if (changed) await AsyncStorage.setItem('cegin_meal_plan', JSON.stringify(plan));
+    }
+    // Update favorites references
+    const favRaw = await AsyncStorage.getItem('cegin_favorites');
+    if (favRaw) {
+      const favs = JSON.parse(favRaw);
+      if (favs[tempId]) { favs[serverId] = favs[tempId]; delete favs[tempId]; await AsyncStorage.setItem('cegin_favorites', JSON.stringify(favs)); }
+    }
+    console.log(`[Sync] Remapped temp ID ${tempId} → ${serverId}`);
+  } catch (e) {
+    console.warn('[Sync] Failed to remap temp ID:', e.message);
+  }
+}
+
 export async function syncPendingChanges() {
   const online = await isOnline();
   if (!online) return;
@@ -104,7 +147,11 @@ export async function syncPendingChanges() {
     try {
       switch (change.type) {
         case 'create':
-          await request('/recipes', { method: 'POST', body: JSON.stringify(change.data) });
+          const created = await request('/recipes', { method: 'POST', body: JSON.stringify(change.data) });
+          // Remap temp ID to server ID if this was an offline-created recipe
+          if (change.tempId && created?.id && change.tempId !== created.id) {
+            await remapTempId(change.tempId, created.id);
+          }
           break;
         case 'update':
           await request(`/recipes/${change.id}`, { method: 'PUT', body: JSON.stringify(change.data) });

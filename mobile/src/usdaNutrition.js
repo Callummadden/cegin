@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 import * as SQLite from 'expo-sqlite';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
@@ -23,8 +26,10 @@ async function getDb() {
         const testDb = await SQLite.openDatabaseAsync(dbPath);
         const tables = await testDb.getFirstAsync("SELECT name FROM sqlite_master WHERE type='table' AND name='allergens'");
         const ver = await testDb.getFirstAsync("SELECT COUNT(*) as c FROM nutrients WHERE calories > 0");
+        const metaVer = await testDb.getFirstAsync("SELECT value FROM meta WHERE key = 'db_version'").catch(() => null);
         await testDb.closeAsync();
-        if (!tables || !ver || ver.c < 1000) {
+        const storedVersion = metaVer ? parseInt(metaVer.value, 10) : 0;
+        if (!tables || !ver || ver.c < 1000 || storedVersion < DB_VERSION) {
           console.log('[USDA] DB stale or empty, deleting...');
           await FileSystem.deleteAsync(dbPath);
         }

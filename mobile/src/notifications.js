@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 // notifications.js — Safe for Expo Go and dev builds
 // Uses dynamic require() so expo-notifications is never loaded in Expo Go
 import Constants, { ExecutionEnvironment } from 'expo-constants';

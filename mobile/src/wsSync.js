@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Cegin Contributors
+// This file is part of Cegin — https://github.com/Callummadden/cegin
 import { AppState } from 'react-native';
 import { getServerUrl, getAppMode } from './config';
 import { clearCache as clearShoppingCache } from './shoppingList';

@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright (C) 2026 Cegin Contributors */
+/* This file is part of Cegin — https://github.com/Callummadden/cegin */
 :root {
   --bg: #131010;
   --surface: #1c1715;
@@ -1446,6 +1449,41 @@ body.theme-panel-open {
   color: var(--text);
   font-size: 1.4rem;
   cursor: pointer;
+}
+
+.lightbox-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+  opacity: 0.85;
+  z-index: 1;
+}
+
+.lightbox-arrow:hover {
+  background: var(--accent);
+  color: #fff;
+  opacity: 1;
+  transform: translateY(-50%) scale(1.08);
+}
+
+.lightbox-arrow-left {
+  left: 20px;
+}
+
+.lightbox-arrow-right {
+  right: 20px;
 }
 
 /* Legacy mockup styles kept for hero phone widget */
