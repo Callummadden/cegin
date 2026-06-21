@@ -8,6 +8,29 @@ const net = require('net');
 const { promisify } = require('util');
 const lookupAsync = promisify(dns.lookup);
 
+// Robust JSON parser for AI responses — fixes common LLM quirks
+function parseJsonSafe(text) {
+  // First try direct parse
+  try { return JSON.parse(text); } catch {}
+  // Extract JSON object/array from markdown fences or surrounding text
+  const m = text.match(/```(?:json)?\s*([\s\S]*?)```/) || text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (!m) throw new Error('No JSON found in AI response');
+  let json = m[1].trim();
+  // Fix trailing commas before ] or }
+  json = json.replace(/,\s*([\]}])/g, '$1');
+  // Fix missing commas between array elements or object properties
+  // (line ending with " or ] or } or number, followed by line starting with " or { or [)
+  json = json.replace(/(["\d\]}])\s*\n\s*(["{\[])/g, '$1,\n$2');
+  try { return JSON.parse(json); } catch {}
+  // Last resort: try to find the largest valid JSON substring
+  for (let i = json.length; i > 0; i--) {
+    if (json[i - 1] === '}' || json[i - 1] === ']') {
+      try { return JSON.parse(json.slice(0, i)); } catch {}
+    }
+  }
+  throw new Error('Could not parse AI response as JSON');
+}
+
 // Flexible provider support. Server admin can use any OpenAI-compatible endpoint
 // or Gemini for vision/text.
 // Secrets are read from: Docker secrets > ./secrets/ dir > env vars.
@@ -707,7 +730,7 @@ async function tidyRecipe(recipe) {
   );
   let parsed;
   try {
-    parsed = JSON.parse(content);
+    parsed = parseJsonSafe(content);
   } catch {
     const err = new Error('The clean-up returned malformed data. Try again.');
     err.status = 502;
@@ -1199,14 +1222,13 @@ async function scanFridge(imageBase64) {
 const SCAN_RECIPE_PROMPT = 'You are looking at a photo of a recipe (from a cookbook, printed page, or screen). Extract the recipe information and return it as JSON with these fields: title (string), description (string, 1-2 sentences), ingredients (array of strings, one per line with quantity), steps (array of strings, one instruction per step in order), tags (array of short lowercase tags - cuisine, course, key ingredient), prep_minutes (number), cook_minutes (number), servings (number). If you cannot determine a numeric field, use 0 for minutes and 1 for servings. Be thorough with ingredients and steps. Do not invent content that is not visible.';
 
 async function scanRecipeImage(imageBase64) {
-  const rawText = await callVisionModel(imageBase64, SCAN_RECIPE_PROMPT, { timeout: 45000, maxTokens: 1500 });
+  const rawText = await callVisionModel(imageBase64, SCAN_RECIPE_PROMPT, { timeout: 45000, maxTokens: 2500 });
 
   let parsed;
   try {
-    parsed = JSON.parse(rawText);
+    parsed = parseJsonSafe(rawText);
   } catch {
-    const m = rawText.match(/\{[\s\S]*\}/);
-    parsed = m ? JSON.parse(m[0]) : {};
+    parsed = {};
   }
   return normalizeRecipe(parsed);
 }
@@ -1235,7 +1257,7 @@ async function applySubstitutions(recipe, substitutions) {
 
   let parsed;
   try {
-    parsed = JSON.parse(content);
+    parsed = parseJsonSafe(content);
   } catch {
     const err = new Error('AI returned a malformed recipe. Try again.');
     err.status = 502;
