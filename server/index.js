@@ -481,7 +481,7 @@ app.post('/api/recipes', (req, res) => {
     const base64 = req.body.image_url.split(',')[1];
     if (base64) {
       const filename = saveBase64Image(base64, UPLOADS_DIR);
-      req.body.image_url = `/api/uploads/${filename}`;
+      req.body.image_url = `/api/uploads/cookbook/${filename}`;
     }
   }
   // S2-7: Pass userId for ownership
@@ -497,7 +497,7 @@ app.put('/api/recipes/:id', (req, res) => {
     const base64 = req.body.image_url.split(',')[1];
     if (base64) {
       const filename = saveBase64Image(base64, UPLOADS_DIR);
-      req.body.image_url = `/api/uploads/${filename}`;
+      req.body.image_url = `/api/uploads/cookbook/${filename}`;
     }
   }
   // S2-7: Pass userId for ownership scoping
