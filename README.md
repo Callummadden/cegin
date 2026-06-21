@@ -19,6 +19,7 @@ A personal recipe app with an AI cooking assistant named Chef Terry.
   <img src="docs/assets/screenshots/vision-recipe.jpg" width="200" alt="Vision Recipe">
   <img src="docs/assets/screenshots/kitchen-log.jpg" width="200" alt="Kitchen Log">
 </p>
+
 * **Store, search, and organize** your recipes
 * **Import recipes** from any URL
 * **Plan meals**, build smart shopping lists, scale ingredients, convert units
