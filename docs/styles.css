@@ -870,7 +870,7 @@ body.theme-panel-open {
 }
 
 .terry-avatar-wrap img {
-  width: min(280px, 80%);
+  width: min(320px, 85%);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   animation: terry-float 4s ease-in-out infinite, terry-glow 3s ease-in-out infinite alternate;
@@ -1453,37 +1453,52 @@ body.theme-panel-open {
 
 .lightbox-arrow {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  border: none;
+  background: transparent;
   color: var(--text);
-  font-size: 1.8rem;
+  font-size: 3rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s ease, transform 0.15s ease;
-  opacity: 0.85;
+  transition: background 0.15s ease;
+  opacity: 0.6;
   z-index: 1;
 }
 
 .lightbox-arrow:hover {
-  background: var(--accent);
-  color: #fff;
+  background: color-mix(in srgb, var(--surface) 40%, transparent);
   opacity: 1;
-  transform: translateY(-50%) scale(1.08);
+}
+
+.lightbox-arrow::after {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-top: 3px solid currentColor;
+  border-left: 3px solid currentColor;
+}
+
+.lightbox-arrow-left::after {
+  transform: rotate(-45deg);
+  margin-right: 8px;
+}
+
+.lightbox-arrow-right::after {
+  transform: rotate(135deg);
+  margin-left: 8px;
 }
 
 .lightbox-arrow-left {
-  left: 20px;
+  left: 0;
 }
 
 .lightbox-arrow-right {
-  right: 20px;
+  right: 0;
 }
 
 /* Legacy mockup styles kept for hero phone widget */
