@@ -205,7 +205,7 @@ EXPO_GO=1 npx expo start
  * **After changing .env or Dockerfile:** use docker compose up -d --build.
  * **better-sqlite3 build errors:** docker compose build --no-cache.
 ## License
-MIT — see LICENSE.
+GPL-3.0 — see LICENSE.
 Enjoy cooking with Terry. 🐱
 ```
 ```
