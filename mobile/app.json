@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cegin",
     "slug": "cegin",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -19,7 +19,7 @@
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "package": "kitchen.cegin.app",
-      "versionCode": 15,
+      "versionCode": 16,
       "permissions": [
         "ACCESS_NETWORK_STATE",
         "INTERNET",
