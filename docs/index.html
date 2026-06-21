@@ -59,7 +59,7 @@
       <div class="hero-content">
         <div class="hero-badge mono">
           <span>●</span> Self-hosted · Offline-first · MIT
-          <span class="version-badge">v1.2.4</span>
+          <span class="version-badge">v1.3.0</span>
         </div>
         <p class="hero-tagline">your kitchen, organised</p>
         <h1>Cook smarter.<br>Own your recipes.</h1>
@@ -895,6 +895,24 @@ docker compose up -d</div>
         <p>Active development — follow releases on GitHub.</p>
       </div>
       <div class="changelog-grid">
+        <article class="changelog-card">
+          <div class="changelog-header">
+            <h3>v1.3.0</h3>
+            <span class="changelog-status released">Released</span>
+          </div>
+          <p class="changelog-date mono">June 21, 2026</p>
+          <ul>
+            <li>Local USDA nutrition engine — 14,046 foods, fully offline with 6-strategy search pipeline</li>
+            <li>Instant allergen detection — gluten, dairy, nuts, soy, eggs, shellfish badges on recipe load</li>
+            <li>Terry's dietary suggestions — AI substitution picker with exact quantities and change highlighting</li>
+            <li>Pre-processing pipeline — compound line splitting, bracket weights, count-based produce weights</li>
+            <li>UK-to-US ingredient translation (80+ mappings) for cross-locale recipe matching</li>
+            <li>Dietary audit improvements — profile-only audits, auto-collapse when all safe</li>
+            <li>Fixed crash on app reset, recipe update field ignoring, and FTS5 search syntax errors</li>
+            <li>Performance: in-memory caches for favorites and chat, memoized timer context</li>
+          </ul>
+          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.3.0" target="_blank" rel="noopener noreferrer">Download v1.3.0 →</a>
+        </article>
         <article class="changelog-card">
           <div class="changelog-header">
             <h3>v1.2.4</h3>
