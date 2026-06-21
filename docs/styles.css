@@ -1244,32 +1244,63 @@ body.theme-panel-open {
 }
 
 /* Screenshots */
-.screenshot-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 32px;
-  align-items: start;
-  max-width: 920px;
-  margin: 0 auto;
+.screenshot-showcase {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  padding-bottom: 8px;
+  margin: 0 -24px;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.screenshot-showcase::-webkit-scrollbar {
+  height: 6px;
+}
+
+.screenshot-showcase::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.screenshot-showcase::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.screenshot-strip {
+  display: flex;
+  gap: 24px;
+  padding: 8px 0;
+  width: max-content;
 }
 
 .screenshot-card {
   margin: 0;
+  flex: 0 0 auto;
+  width: 220px;
+  transition: transform 0.3s ease;
+}
+
+.screenshot-card:hover {
+  transform: translateY(-4px);
 }
 
 .screenshot-card figcaption {
-  margin-top: 14px;
+  margin-top: 12px;
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
   color: var(--text-muted);
-  line-height: 1.4;
+  letter-spacing: 0.02em;
 }
 
 .phone-frame {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 28px;
-  padding: 12px;
+  padding: 10px;
   box-shadow: var(--shadow);
   overflow: hidden;
   display: flex;
@@ -1293,12 +1324,12 @@ body.theme-panel-open {
   cursor: zoom-in;
   border: none;
   font: inherit;
-  transition: border-color 0.2s ease, transform 0.15s ease;
+  transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.3s ease;
 }
 
 .screenshot-card button.phone-frame:hover {
   border-color: color-mix(in srgb, var(--primary) 35%, transparent);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .screenshot-card button.phone-frame:focus-visible {
@@ -1308,7 +1339,7 @@ body.theme-panel-open {
 
 .screenshot-note {
   text-align: center;
-  margin-top: 28px;
+  margin-top: 24px;
   font-size: 0.75rem;
   color: var(--text-muted);
 }
@@ -1979,9 +2010,12 @@ body.theme-panel-open {
 
   .features-grid,
   .terry-features,
-  .stack-grid,
-  .screenshot-grid {
+  .stack-grid {
     grid-template-columns: 1fr;
+  }
+
+  .screenshot-card {
+    width: 180px;
   }
 
   .hero {

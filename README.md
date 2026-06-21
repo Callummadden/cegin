@@ -1,6 +1,24 @@
 Cegin
 A personal recipe app with an AI cooking assistant named Chef Terry.
 [![Docker Image](https://img.shields.io/badge/docker-pull-blue.svg?logo=docker)](https://hub.docker.com/r/callum2254/cegin)
+
+<p align="center">
+  <img src="docs/assets/screenshots/recipe-library.jpg" width="200" alt="Recipe Library">
+  <img src="docs/assets/screenshots/terry-chat.jpg" width="200" alt="Chef Terry Chat">
+  <img src="docs/assets/screenshots/meal-plan.jpg" width="200" alt="Meal Planner">
+  <img src="docs/assets/screenshots/cook-mode.jpg" width="200" alt="Cook Mode">
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/recipe-detail.jpg" width="200" alt="Recipe Detail">
+  <img src="docs/assets/screenshots/cook-fix.jpg" width="200" alt="Mid-Cook Fix">
+  <img src="docs/assets/screenshots/shopping-list.jpg" width="200" alt="Shopping List">
+  <img src="docs/assets/screenshots/terry-vision.jpg" width="200" alt="Terry Vision">
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/terry-home.jpg" width="200" alt="Chef Terry Home">
+  <img src="docs/assets/screenshots/vision-recipe.jpg" width="200" alt="Vision Recipe">
+  <img src="docs/assets/screenshots/kitchen-log.jpg" width="200" alt="Kitchen Log">
+</p>
 * **Store, search, and organize** your recipes
 * **Import recipes** from any URL
 * **Plan meals**, build smart shopping lists, scale ingredients, convert units
