@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { api } from '../api';
+import { api, proxyImageUrlSync } from '../api';
 import { invalidateRecipeAudits, invalidateRecipeNutrition, invalidateRecipePrep } from '../auditCache';
 import { MONO, useTheme } from '../theme';
 import AppModal from '../components/AppModal';
@@ -290,7 +290,7 @@ export default function EditRecipeScreen({ route, navigation }) {
           <Text style={[styles.fieldLabel, { fontFamily: MONO, color: colors.textMuted }]}>PHOTO</Text>
           {imageUrl ? (
             <View style={{ marginBottom: 8 }}>
-              <Image source={{ uri: imageUrl }} style={{ width: '100%', height: 200, borderRadius: 16 }} contentFit="cover" />
+              <Image source={{ uri: proxyImageUrlSync(imageUrl) }} style={{ width: '100%', height: 200, borderRadius: 16 }} contentFit="cover" />
               <Pressable
                 style={[styles.importBtn, { backgroundColor: colors.danger, marginTop: 8 }]}
                 onPress={() => setImageUrl('')}

@@ -18,7 +18,7 @@ import {
 import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { api } from '../api';
+import { api, proxyImageUrlSync } from '../api';
 import { MONO, useTheme } from '../theme';
 import { subscribe } from '../wsSync';
 import { getMealPlan, setMeal, clearMeal, getWeekStart, formatDate, MEALS, MEAL_META, getCachedPlan } from '../mealPlan';
@@ -235,7 +235,7 @@ export default function MealPlannerScreen({ navigation }) {
               onPress={() => handlePick(item.id)}
             >
               {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={styles.pickImg} contentFit="cover" />
+                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={styles.pickImg} contentFit="cover" />
               ) : (
                 <View style={[styles.pickImgPlaceholder, { backgroundColor: colors.background }]}>
                   <Text style={{ color: colors.textMuted, fontSize: 10 }}>NO PHOTO</Text>

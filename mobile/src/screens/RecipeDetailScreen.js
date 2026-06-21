@@ -19,7 +19,7 @@ import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { createAudioPlayer } from 'expo-audio';
-import { api } from '../api';
+import { api, proxyImageUrlSync } from '../api';
 import { MONO, useTheme } from '../theme';
 import AppModal from '../components/AppModal';
 import AiDisclaimer from '../components/AiDisclaimer';
@@ -373,7 +373,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
         {/* Hero */}
         {recipe.image_url ? (
           <View style={[styles.hero, { overflow: 'hidden' }]}>
-            <Image source={{ uri: recipe.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" />
+            <Image source={{ uri: proxyImageUrlSync(recipe.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" />
             <View style={styles.heroDark} />
             <Pressable style={[styles.backBtn, { top: 14 + insets.top }]} onPress={() => navigation.goBack()}>
               <Text style={styles.backText}>←</Text>

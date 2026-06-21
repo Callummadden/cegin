@@ -24,7 +24,7 @@ import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { api, getServerUrl } from '../api';
+import { api, getServerUrl, proxyImageUrlSync } from '../api';
 import { getAppMode } from '../config';
 import { MONO, useTheme } from '../theme';
 import { isOnline as checkOnline, setOnline, getPendingChanges, syncPendingChanges, getCachedRecipesSync } from '../offlineCache';
@@ -446,7 +446,7 @@ export default function RecipeListScreen({ navigation }) {
           <View style={[styles.card, pressed && styles.cardPressed]}>
             <View style={[styles.cardBg, item.image_url ? { overflow: 'hidden' } : { backgroundColor: bg }]}>
               {item.image_url && (
-                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`recipe-${item.id}`} transition={300} />
+                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`recipe-${item.id}`} transition={300} />
               )}
               <View style={styles.cardDark} />
               {itemCollections.length > 0 && (
@@ -495,7 +495,7 @@ export default function RecipeListScreen({ navigation }) {
             <View style={[styles.listAccent, { backgroundColor: colors.primary }]} />
             <View style={[styles.listThumb, { backgroundColor: bg }]}>
               {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`list-${item.id}`} transition={300} />
+                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`list-${item.id}`} transition={300} />
               ) : null}
               <View style={styles.cardDark} />
             </View>
@@ -542,7 +542,7 @@ export default function RecipeListScreen({ navigation }) {
           <View style={[styles.gridInner, pressed && styles.cardPressed]}>
             <View style={[styles.gridThumb, { backgroundColor: bg }]}>
               {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`grid-${item.id}`} transition={300} />
+                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`grid-${item.id}`} transition={300} />
               ) : null}
               <View style={styles.cardDark} />
               <Pressable onPress={() => onToggleFav(item.id)} hitSlop={8} style={styles.gridFavBtn}>

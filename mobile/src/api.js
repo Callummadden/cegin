@@ -78,8 +78,11 @@ export async function proxyImageUrl(url, width = 600) {
   if (!url) return null;
   // Don't proxy local files, data URIs, or already-proxied URLs
   if (url.startsWith('file://') || url.startsWith('data:') || url.includes('/api/image-proxy')) return url;
-  // Don't proxy local server uploads
-  if (url.includes('/api/uploads/')) return url;
+  // Prepend server base URL for relative upload paths
+  if (url.startsWith('/api/uploads/')) {
+    const base = await getServerUrl();
+    return base ? `${base}${url}` : url;
+  }
   const base = await getServerUrl();
   if (!base) return url;
   return `${base}/api/image-proxy?url=${encodeURIComponent(url)}&w=${width}`;
@@ -91,7 +94,8 @@ getServerUrl().then(u => { _cachedServerUrl = u; }).catch(() => {});
 export function proxyImageUrlSync(url, width = 600) {
   if (!url) return null;
   if (url.startsWith('file://') || url.startsWith('data:') || url.includes('/api/image-proxy')) return url;
-  if (url.includes('/api/uploads/')) return url;
+  // Prepend server base URL for relative upload paths
+  if (url.startsWith('/api/uploads/')) return _cachedServerUrl ? `${_cachedServerUrl}${url}` : url;
   if (!_cachedServerUrl) return url;
   return `${_cachedServerUrl}/api/image-proxy?url=${encodeURIComponent(url)}&w=${width}`;
 }
