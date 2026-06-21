@@ -337,7 +337,6 @@ export default function RecipeListScreen({ navigation }) {
     }
   }, []);
 
-  const firstEffectRef = useRef(true);
   useFocusEffect(useCallback(() => { load(search); }, [load])); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -345,10 +344,6 @@ export default function RecipeListScreen({ navigation }) {
     const unsub2 = subscribe('collections', () => load('', true));
     return () => { unsub1(); unsub2(); };
   }, [load]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (firstEffectRef.current) { firstEffectRef.current = false; return; }
-    // Client-side filtering handles search — no server fetch needed per keystroke
-  }, [search]);
 
   const q = search.toLowerCase();
   const SORTERS = {
@@ -446,66 +441,34 @@ export default function RecipeListScreen({ navigation }) {
       >
         {({ pressed }) => (
           <View style={[styles.card, pressed && styles.cardPressed]}>
-            {item.image_url ? (
-              <View style={[styles.cardBg, { overflow: 'hidden' }]}>
+            <View style={[styles.cardBg, item.image_url ? { overflow: 'hidden' } : { backgroundColor: bg }]}>
+              {item.image_url && (
                 <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`recipe-${item.id}`} transition={300} />
-                <View style={styles.cardDark} />
-                {/* Collection badges */}
-                {itemCollections.length > 0 && (
-                  <View style={styles.collectionBadges}>
-                    {itemCollections.slice(0, 2).map((c) => (
-                      <View key={c.name} style={[styles.collectionBadge, { backgroundColor: 'rgba(255,90,38,0.85)' }]}>
-                        <Text style={styles.collectionBadgeText}>{c.name.toUpperCase()}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-                {/* Favorite */}
-                <Pressable
-                  style={styles.heartBtn}
-                  onPress={() => onToggleFav(item.id)}
-                  hitSlop={10}
-                >
-                  <Text style={[styles.heart, isFav && { color: colors.primary }]}>
-                    {isFav ? '♥' : '♡'}
-                  </Text>
-                </Pressable>
-                {/* Bottom gradient footer */}
-                <View style={styles.cardFooter}>
-                  <Text style={styles.cardTitle} numberOfLines={2}>{item.title.toUpperCase()}</Text>
-                  <Text style={styles.cardMeta}>{meta}</Text>
+              )}
+              <View style={styles.cardDark} />
+              {itemCollections.length > 0 && (
+                <View style={styles.collectionBadges}>
+                  {itemCollections.slice(0, 2).map((c) => (
+                    <View key={c.name} style={[styles.collectionBadge, { backgroundColor: 'rgba(255,90,38,0.85)' }]}>
+                      <Text style={styles.collectionBadgeText}>{c.name.toUpperCase()}</Text>
+                    </View>
+                  ))}
                 </View>
+              )}
+              <Pressable
+                style={styles.heartBtn}
+                onPress={() => onToggleFav(item.id)}
+                hitSlop={10}
+              >
+                <Text style={[styles.heart, isFav && { color: colors.primary }]}>
+                  {isFav ? '♥' : '♡'}
+                </Text>
+              </Pressable>
+              <View style={styles.cardFooter}>
+                <Text style={styles.cardTitle} numberOfLines={2}>{item.title.toUpperCase()}</Text>
+                <Text style={styles.cardMeta}>{meta}</Text>
               </View>
-            ) : (
-              <View style={[styles.cardBg, { backgroundColor: bg }]}>
-                <View style={styles.cardDark} />
-                {/* Collection badges */}
-                {itemCollections.length > 0 && (
-                  <View style={styles.collectionBadges}>
-                    {itemCollections.slice(0, 2).map((c) => (
-                      <View key={c.name} style={[styles.collectionBadge, { backgroundColor: 'rgba(255,90,38,0.85)' }]}>
-                        <Text style={styles.collectionBadgeText}>{c.name.toUpperCase()}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-                {/* Favorite */}
-                <Pressable
-                  style={styles.heartBtn}
-                  onPress={() => onToggleFav(item.id)}
-                  hitSlop={10}
-                >
-                  <Text style={[styles.heart, isFav && { color: colors.primary }]}>
-                    {isFav ? '♥' : '♡'}
-                  </Text>
-                </Pressable>
-                {/* Bottom gradient footer */}
-                <View style={styles.cardFooter}>
-                  <Text style={styles.cardTitle} numberOfLines={2}>{item.title.toUpperCase()}</Text>
-                  <Text style={styles.cardMeta}>{meta}</Text>
-                </View>
-              </View>
-            )}
+            </View>
           </View>
         )}
       </Pressable>
@@ -817,6 +780,7 @@ export default function RecipeListScreen({ navigation }) {
               refreshing={loading && filtered.length > 0}
               onRefresh={() => load(search, true)}
               tintColor={colors.primary}
+              progressViewOffset={220}
             />
           }
           ListHeaderComponent={
@@ -1005,7 +969,6 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   },
   wordmark: { fontSize: fs(18), fontWeight: '900', letterSpacing: 1, color: colors.text },
   recipeCount: { fontSize: fs(11), letterSpacing: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: s(12) },
   settingsBtn: {
     width: s(34),
     height: s(34),
@@ -1015,20 +978,6 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
     justifyContent: 'center',
   },
   hero: { paddingHorizontal: s(20), paddingTop: s(18) },
-  heroText: {
-    fontSize: fs(40),
-    fontWeight: '900',
-    lineHeight: fs(40),
-    letterSpacing: -1,
-    color: colors.text,
-  },
-  heroOutline: { fontSize: fs(40), fontWeight: '900' },
-  searchSortRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: s(20),
-    gap: s(8),
-  },
   searchRow: {
     marginHorizontal: s(20),
     marginTop: s(18),
@@ -1045,7 +994,6 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
     paddingVertical: s(14),
     fontSize: fs(13),
   },
-  searchIcon: { fontSize: fs(16) },
   sortBtn: {
     marginTop: s(18),
     borderWidth: 1.5,
@@ -1058,17 +1006,12 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   tabsContent: { paddingHorizontal: s(20), gap: s(8) },
   tabItem: { paddingHorizontal: s(14), paddingVertical: s(7), borderRadius: s(20), borderWidth: 1.5 },
   tabLabel: { fontSize: fs(11), letterSpacing: 0.5, fontWeight: '600' },
-  tabActive: {},
-  tabUnderline: { display: 'none' },
-  chipsRow: { marginTop: s(8), flexGrow: 0 },
-  chipsContent: { paddingHorizontal: s(20), gap: s(8) },
   chip: {
     paddingHorizontal: s(12),
     paddingVertical: s(6),
     borderRadius: s(20),
     borderWidth: 1.5,
   },
-  chipLabel: { fontSize: fs(10), letterSpacing: 0.8 },
   searchHistoryRow: { marginTop: s(6), flexGrow: 0 },
   searchHistoryContent: { paddingHorizontal: s(20), gap: s(8) },
   searchHistoryChip: {
@@ -1132,14 +1075,6 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
     marginTop: s(6),
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: s(32) },
-  emptyCard: {
-    alignItems: 'center',
-    marginTop: s(20),
-    padding: s(40),
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderRadius: s(18),
-  },
   emptyState: {
     alignItems: 'center',
     marginTop: s(40),

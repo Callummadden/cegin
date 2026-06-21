@@ -201,36 +201,6 @@ async function callVisionModel(imageBase64, prompt = 'List every food item you c
   return callOpenAICompatible(config, [visionMessage], { temperature: 0.2 });
 }
 
-// ── Legacy direct functions (kept for compatibility during transition) ─────
-
-async function deepseekChat(messages, { json = false } = {}) {
-  const apiKey = await getDeepSeekKey();
-  if (!apiKey) throw new Error('API key not configured. Add it in Settings.');
-  const body = {
-    model: 'deepseek-chat',
-    messages,
-    temperature: 0.7,
-  };
-  if (json) body.response_format = { type: 'json_object' };
-
-  const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`DeepSeek API error (${res.status}): ${text}`);
-  }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? '';
-}
-
 // ── Exported Functions (now use user-chosen providers when configured) ─────
 
 export async function chat(messages, dietaryProfiles) {

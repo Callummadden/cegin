@@ -3,8 +3,6 @@
 // It contains NO native imports — keeps the app red-screen free.
 // The real implementation lives in notifications.js (used by dev builds).
 
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 
 export async function requestPermissions() {
   console.log('[notifications] Skipping in Expo Go');

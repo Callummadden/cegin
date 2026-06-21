@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { AppState, Vibration } from 'react-native';
-import { requestPermissions, scheduleNotification, cancelNotification, cancelAllNotifications } from './notifications';
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { AppState } from 'react-native';
+
+import { scheduleNotification, cancelNotification } from './notifications';
 
 const TimerContext = createContext({
   timers: {},
@@ -169,7 +170,10 @@ export function TimerProvider({ children }) {
     });
   }, [stopAlarm]);
 
-  const value = { timers, activeRecipe, activeStep, setActiveRecipe, setActiveStep, startTimer, pauseTimer, resumeTimer, cancelTimer, stopAlarm, registerStopAlarm };
+  const value = useMemo(() => ({
+    timers, activeRecipe, activeStep, setActiveRecipe, setActiveStep,
+    startTimer, pauseTimer, resumeTimer, cancelTimer, stopAlarm, registerStopAlarm,
+  }), [timers, activeRecipe, activeStep, startTimer, pauseTimer, resumeTimer, cancelTimer, stopAlarm, registerStopAlarm]);
 
   return (
     <TimerContext.Provider value={value}>

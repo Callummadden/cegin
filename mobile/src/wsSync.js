@@ -105,6 +105,17 @@ export async function connect() {
       reconnectDelay = 1000;
       lastPong = Date.now();
       startPing();
+      // Flush any pending cache clears that arrived while disconnected
+      for (const [type, timer] of pendingCallbacks) {
+        clearTimeout(timer);
+        pendingCallbacks.delete(type);
+        const clearer = cacheClearers[type];
+        if (clearer) clearer();
+        const subs = subscribers.get(type);
+        if (subs) for (const cb of subs) try { cb('changed'); } catch {}
+        const wildcardSubs = subscribers.get('*');
+        if (wildcardSubs) for (const cb of wildcardSubs) try { cb(type, 'changed'); } catch {}
+      }
     };
 
     ws.onmessage = (event) => {
@@ -226,10 +237,13 @@ export function initAppStateListener() {
     const isNowActive = nextState === 'active';
 
     if (wasBackground && isNowActive) {
-      // App came to foreground — force reconnect (drop stale connection)
+      // App came to foreground — force full teardown and reconnect
       console.log('[WS] App foregrounded — forcing reconnect');
-      if (ws) { try { ws.close(); } catch {} ws = null; }
+      intentionalClose = false;
+      if (ws) { try { ws.onclose = null; ws.close(); } catch {} ws = null; }
       stopPing();
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      reconnectDelay = 1000;
       connect();
     }
 

@@ -40,15 +40,7 @@ async function imageToBase64(uri) {
   }
 }
 
-// Resolve relative server paths to full URLs
-function resolveImageUri(uri) {
-  if (!uri) return null;
-  // Already a full URL or local file
-  if (uri.startsWith('http') || uri.startsWith('file://') || uri.startsWith('content://')) return uri;
-  // Relative server path — prepend server URL
-  return getServerUrl().then(base => base ? `${base}${uri}` : uri);
-}
-
+// Resolve all entries' image URIs
 async function resolveEntries(entries) {
   const base = await getServerUrl();
   return entries.map(e => ({

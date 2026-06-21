@@ -3,6 +3,7 @@ import { api } from './api';
 import { getAppMode } from './config';
 
 const KEY = 'cegin_favorites';
+let _cache = null;
 
 async function isServerMode() {
   const mode = await getAppMode();
@@ -10,10 +11,12 @@ async function isServerMode() {
 }
 
 export async function getFavorites() {
+  if (_cache) return _cache;
   if (await isServerMode()) {
     try {
       const server = await api.getFavorites();
       if (server) {
+        _cache = server;
         await AsyncStorage.setItem(KEY, JSON.stringify(server));
         return server;
       }
@@ -24,9 +27,22 @@ export async function getFavorites() {
 
   try {
     const raw = await AsyncStorage.getItem(KEY);
-    return raw ? JSON.parse(raw) : {};
+    _cache = raw ? JSON.parse(raw) : {};
+    return _cache;
   } catch {
     return {};
+  }
+}
+
+export async function clearFavorites() {
+  _cache = null;
+  await AsyncStorage.setItem(KEY, JSON.stringify({}));
+  if (await isServerMode()) {
+    try {
+      await api.clearFavorites();
+    } catch {
+      // Server offline — cleared locally
+    }
   }
 }
 
@@ -38,6 +54,7 @@ export async function toggleFavorite(id) {
   } else {
     next[id] = true;
   }
+  _cache = next;
   await AsyncStorage.setItem(KEY, JSON.stringify(next));
 
   if (await isServerMode()) {

@@ -410,6 +410,9 @@ export const api = {
     if ((await getAppMode()) === 'local' || (await hasCustomAI())) return localAi.auditRecipe(recipe, dietaryProfiles);
     return request('/ai/audit-recipe', { method: 'POST', body: JSON.stringify({ recipe, dietaryProfiles }) });
   },
+  applySubstitutions: async ({ recipe, substitutions }) => {
+    return request('/ai/apply-substitutions', { method: 'POST', body: JSON.stringify({ recipe, substitutions }) });
+  },
 
   // Mid-cook AI features
   fixMistake: async ({ recipe, currentStep, problem }) => {

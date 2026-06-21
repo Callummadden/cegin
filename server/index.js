@@ -2,7 +2,6 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
-const { readSecret, readConfig } = require('./secrets');
 const {
   listRecipes,
   getRecipe,
@@ -27,6 +26,7 @@ const { signToken, authMiddleware, hashPassword, comparePassword } = require('./
 const dbModule = require('./db');
 const { startCron } = require('./cron');
 const { sendPush } = require('./notifications');
+const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 
 const app = express();
@@ -80,6 +80,30 @@ cleanupTimer.unref();
 
 // S2-3: Rate limiter early on /api/ai routes (before body parser)
 app.use('/api/ai', rateLimiter);
+
+// --- Shared helpers ---
+function parseId(param) {
+  const id = parseInt(param, 10);
+  return isNaN(id) ? null : id;
+}
+
+function cookbookEntryToResponse(e) {
+  return {
+    id: e.id,
+    recipeId: e.recipe_id,
+    recipeTitle: e.recipe_title,
+    imageUri: e.image_path ? `/api/uploads/cookbook/${e.image_path}` : null,
+    date: e.date,
+    notes: e.notes,
+  };
+}
+
+function saveBase64Image(base64, dir) {
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const filepath = path.join(dir, filename);
+  fs.writeFileSync(filepath, Buffer.from(base64, 'base64'));
+  return filename;
+}
 
 // --- Body parsing (S2-11: path-aware to avoid stacking) ---
 const bodyParser1mb = express.json({ limit: '1mb' });
@@ -308,6 +332,20 @@ app.post('/api/ai/audit-recipe', async (req, res) => {
   }
 });
 
+// Apply dietary substitutions to a recipe. Body: { recipe, substitutions: ["swap X for Y", ...] }
+app.post('/api/ai/apply-substitutions', async (req, res) => {
+  const { recipe, substitutions } = req.body;
+  if (!recipe || !Array.isArray(substitutions) || substitutions.length === 0) {
+    return res.status(400).json({ error: 'recipe and substitutions array are required' });
+  }
+  try {
+    const result = await ai.applySubstitutions(recipe, substitutions);
+    res.json({ recipe: result });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 // "I Messed Up" — panic fix for mid-cook disasters.
 // Body: { recipe: {...}, currentStep: "step text", problem: "what went wrong" }
 app.post('/api/ai/fix-mistake', async (req, res) => {
@@ -346,7 +384,6 @@ app.post('/api/ai/nutrition', async (req, res) => {
   }
   try {
     const nutrition = await ai.estimateNutrition({ title, ingredients, servings });
-    res.json({ nutrition });
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
@@ -414,8 +451,8 @@ app.get('/api/recipes/search', (req, res) => {
 });
 
 app.get('/api/recipes/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid recipe ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid recipe ID' });
   // S2-7: Pass userId for ownership scoping
   const recipe = getRecipe(id, req.user?.id);
   if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
@@ -432,8 +469,8 @@ app.post('/api/recipes', (req, res) => {
 });
 
 app.put('/api/recipes/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid recipe ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid recipe ID' });
   // S2-7: Pass userId for ownership scoping
   const recipe = updateRecipe(id, req.body, req.user?.id);
   if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
@@ -442,8 +479,8 @@ app.put('/api/recipes/:id', (req, res) => {
 });
 
 app.delete('/api/recipes/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid recipe ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid recipe ID' });
   // S2-7: Pass userId for ownership scoping
   if (!deleteRecipe(id, req.user?.id)) {
     return res.status(404).json({ error: 'Recipe not found' });
@@ -467,8 +504,8 @@ app.get('/api/collections', (req, res) => {
 });
 
 app.get('/api/collections/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid collection ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid collection ID' });
   // S2-7: Pass userId for ownership scoping
   const col = getCollection(id, req.user?.id);
   if (!col) return res.status(404).json({ error: 'Collection not found' });
@@ -489,8 +526,8 @@ app.post('/api/collections', (req, res, next) => {
 });
 
 app.put('/api/collections/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid collection ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid collection ID' });
   // S2-7: Pass userId for ownership scoping
   const col = updateCollection(id, req.body, req.user?.id);
   if (!col) return res.status(404).json({ error: 'Collection not found' });
@@ -499,8 +536,8 @@ app.put('/api/collections/:id', (req, res) => {
 });
 
 app.delete('/api/collections/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid collection ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid collection ID' });
   // S2-7: Pass userId for ownership scoping
   if (!deleteCollection(id, req.user?.id)) {
     return res.status(404).json({ error: 'Collection not found' });
@@ -510,9 +547,9 @@ app.delete('/api/collections/:id', (req, res) => {
 });
 
 app.post('/api/collections/:id/recipes/:recipeId', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const recipeId = parseInt(req.params.recipeId, 10);
-  if (isNaN(id) || isNaN(recipeId)) return res.status(400).json({ error: 'Invalid ID' });
+  const id = parseId(req.params.id);
+  const recipeId = parseId(req.params.recipeId);
+  if (id === null || recipeId === null) return res.status(400).json({ error: 'Invalid ID' });
   // S2-7: Pass userId for ownership scoping
   const col = addRecipeToCollection(id, recipeId, req.user?.id);
   if (!col) return res.status(404).json({ error: 'Collection not found' });
@@ -521,9 +558,9 @@ app.post('/api/collections/:id/recipes/:recipeId', (req, res) => {
 });
 
 app.delete('/api/collections/:id/recipes/:recipeId', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const recipeId = parseInt(req.params.recipeId, 10);
-  if (isNaN(id) || isNaN(recipeId)) return res.status(400).json({ error: 'Invalid ID' });
+  const id = parseId(req.params.id);
+  const recipeId = parseId(req.params.recipeId);
+  if (id === null || recipeId === null) return res.status(400).json({ error: 'Invalid ID' });
   // S2-7: Pass userId for ownership scoping
   const col = removeRecipeFromCollection(id, recipeId, req.user?.id);
   if (!col) return res.status(404).json({ error: 'Collection not found' });
@@ -534,14 +571,14 @@ app.delete('/api/collections/:id/recipes/:recipeId', (req, res) => {
 // --- Recipe Images ---
 
 app.get('/api/recipes/:id/images', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid recipe ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid recipe ID' });
   res.json(getRecipeImages(id, req.user?.id));
 });
 
 app.post('/api/recipes/:id/images', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid recipe ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid recipe ID' });
   if (!req.body.image_url) return res.status(400).json({ error: 'image_url is required' });
   const image = addRecipeImage(id, req.body.image_url, req.user?.id);
   if (!image) return res.status(404).json({ error: 'Recipe not found' });
@@ -550,8 +587,8 @@ app.post('/api/recipes/:id/images', (req, res) => {
 });
 
 app.delete('/api/images/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid image ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid image ID' });
   if (!deleteRecipeImage(id, req.user?.id)) {
     return res.status(404).json({ error: 'Image not found' });
   }
@@ -653,8 +690,8 @@ app.post('/api/scanned-items', (req, res) => {
 });
 
 app.put('/api/scanned-items/:id/consume', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid item ID' });
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid item ID' });
   if (!dbModule.markItemConsumed(id, req.user?.id || 0)) {
     return res.status(404).json({ error: 'Item not found' });
   }
@@ -729,7 +766,6 @@ app.get('/api/image-proxy', bodyParser5mb, async (req, res) => {
   const width = Math.min(parseInt(w, 10) || 600, 1200);
 
   // Cache key based on url + width
-  const crypto = require('crypto');
   const cacheKey = crypto.createHash('md5').update(`${url}_${width}`).digest('hex') + '.jpg';
   const cachePath = path.join(IMAGE_CACHE_DIR, cacheKey);
 
@@ -763,30 +799,14 @@ app.get('/api/image-proxy', bodyParser5mb, async (req, res) => {
 app.get('/api/cookbook', (req, res) => {
   const userId = req.user?.id || 0;
   const entries = dbModule.getCookbookEntries(userId);
-  // Map DB fields to client fields
-  res.json(entries.map(e => ({
-    id: e.id,
-    recipeId: e.recipe_id,
-    recipeTitle: e.recipe_title,
-    imageUri: e.image_path ? `/api/uploads/cookbook/${e.image_path}` : null,
-    date: e.date,
-    notes: e.notes,
-  })));
+  res.json(entries.map(cookbookEntryToResponse));
 });
 
 app.post('/api/cookbook', (req, res) => {
   const userId = req.user?.id || 0;
   const { recipeId, recipeTitle, imageBase64, date, notes } = req.body;
 
-  let imagePath = '';
-  if (imageBase64) {
-    // Save image to disk
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const filepath = path.join(UPLOADS_DIR, filename);
-    const buffer = Buffer.from(imageBase64, 'base64');
-    fs.writeFileSync(filepath, buffer);
-    imagePath = filename;
-  }
+  const imagePath = imageBase64 ? saveBase64Image(imageBase64, UPLOADS_DIR) : '';
 
   const entry = dbModule.addCookbookEntry(userId, {
     id: req.body.id,
@@ -797,14 +817,7 @@ app.post('/api/cookbook', (req, res) => {
     notes,
   });
 
-  res.status(201).json({
-    id: entry.id,
-    recipeId: entry.recipe_id,
-    recipeTitle: entry.recipe_title,
-    imageUri: entry.image_path ? `/api/uploads/cookbook/${entry.image_path}` : null,
-    date: entry.date,
-    notes: entry.notes,
-  });
+  res.status(201).json(cookbookEntryToResponse(entry));
   broadcast('cookbook', 'changed');
 });
 
@@ -813,14 +826,7 @@ app.put('/api/cookbook/:id', (req, res) => {
   const { id } = req.params;
   const { recipeTitle, imageBase64, notes, date } = req.body;
 
-  let imagePath;
-  if (imageBase64) {
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const filepath = path.join(UPLOADS_DIR, filename);
-    const buffer = Buffer.from(imageBase64, 'base64');
-    fs.writeFileSync(filepath, buffer);
-    imagePath = filename;
-  }
+  const imagePath = imageBase64 ? saveBase64Image(imageBase64, UPLOADS_DIR) : undefined;
 
   const updated = dbModule.updateCookbookEntry(id, userId, {
     recipeTitle,
@@ -830,14 +836,7 @@ app.put('/api/cookbook/:id', (req, res) => {
   });
   if (!updated) return res.status(404).json({ error: 'Entry not found' });
 
-  res.json({
-    id: updated.id,
-    recipeId: updated.recipe_id,
-    recipeTitle: updated.recipe_title,
-    imageUri: updated.image_path ? `/api/uploads/cookbook/${updated.image_path}` : null,
-    date: updated.date,
-    notes: updated.notes,
-  });
+  res.json(cookbookEntryToResponse(updated));
   broadcast('cookbook', 'changed');
 });
 
@@ -895,9 +894,7 @@ app.post('/api/terry-vision/scans', (req, res) => {
   }
   const scanId = id || `tv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const filename = `${scanId}.jpg`;
-  const filepath = path.join(TERRY_VISION_DIR, filename);
-  const buffer = Buffer.from(imageBase64, 'base64');
-  fs.writeFileSync(filepath, buffer);
+  fs.writeFileSync(path.join(TERRY_VISION_DIR, filename), Buffer.from(imageBase64, 'base64'));
 
   const scan = dbModule.addTerryVisionScan(userId, {
     id: scanId,

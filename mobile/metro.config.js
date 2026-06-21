@@ -10,6 +10,9 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
+// Bundle .db files as assets (for USDA nutrition database)
+config.resolver.assetExts.push('db');
+
 const isExpoGo = process.env.EXPO_GO === '1';
 
 if (isExpoGo) {

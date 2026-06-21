@@ -13,6 +13,7 @@ import { clearCookbook } from './cookbook';
 import { clearDietaryProfiles } from './dietProfiles';
 import { clearFavorites } from './favorites';
 import { clearActivityContext } from './dietProfiles';
+import { clearAuditCache } from './auditCache';
 
 const LOCAL_DB_NAME = 'cegin.db';
 
@@ -37,6 +38,7 @@ export async function resetApp() {
       clearDietaryProfiles(),
       clearFavorites(),
       clearActivityContext(),
+      clearAuditCache(),
     ]);
 
     // If in server mode, also explicitly clear server-side data

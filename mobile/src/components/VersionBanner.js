@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MONO, useTheme } from '../theme';
 import { checkVersions, getVersionStatus, CLIENT_VERSION } from '../versionCheck';
 
@@ -8,17 +9,9 @@ export default function VersionBanner() {
   const [status, setStatus] = useState(null);
   const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    checkVersions().then(setStatus);
-  }, []);
-
-  // Re-check when screen regains focus (simple interval)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      checkVersions().then(setStatus);
-    }, 60000); // every 60s
-    return () => clearInterval(interval);
-  }, []);
+  // Check on mount and when screen regains focus — no polling needed
+  useEffect(() => { checkVersions().then(setStatus); }, []);
+  useFocusEffect(() => { checkVersions().then(setStatus); });
 
   if (!status || dismissed) return null;
 

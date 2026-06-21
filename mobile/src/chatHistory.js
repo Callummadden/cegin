@@ -4,6 +4,7 @@ import { getAppMode } from './config';
 
 const HISTORY_KEY = 'cegin_chat_history';
 const MAX_HISTORY = 50;
+let _cache = null;
 
 // Each conversation: { id, title, messages, timestamp }
 
@@ -13,10 +14,12 @@ async function isServerMode() {
 }
 
 export async function getChatHistory() {
+  if (_cache) return _cache;
   if (await isServerMode()) {
     try {
       const server = await api.getChatHistory();
       if (server) {
+        _cache = server;
         await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(server));
         return server;
       }
@@ -27,13 +30,15 @@ export async function getChatHistory() {
 
   try {
     const raw = await AsyncStorage.getItem(HISTORY_KEY);
-    return raw ? JSON.parse(raw) : [];
+    _cache = raw ? JSON.parse(raw) : [];
+    return _cache;
   } catch {
     return [];
   }
 }
 
 async function save(history) {
+  _cache = history;
   await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 
   if (await isServerMode()) {
@@ -80,6 +85,7 @@ export async function deleteConversation(id) {
 }
 
 export async function clearHistory() {
+  _cache = null;
   if (await isServerMode()) {
     try {
       await api.clearChatHistory();

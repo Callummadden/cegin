@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { api } from '../api';
+import { invalidateRecipeAudits, invalidateRecipeNutrition, invalidateRecipePrep } from '../auditCache';
 import { MONO, useTheme } from '../theme';
 import AppModal from '../components/AppModal';
 import AiDisclaimer from '../components/AiDisclaimer';
@@ -33,6 +34,31 @@ export default function EditRecipeScreen({ route, navigation }) {
   const existing = route.params?.recipe;
   const source = existing ?? route.params?.draft;
   const mode = route.params?.mode; // 'url' | 'manual' | undefined
+  const fromAudit = route.params?.fromAudit;
+  const originalRecipe = route.params?.originalRecipe;
+
+  // Compute changed fields and specific changed lines
+  const { changedFields, changedIngredients, changedSteps } = useMemo(() => {
+    if (!fromAudit || !originalRecipe || !source) return { changedFields: new Set(), changedIngredients: [], changedSteps: [] };
+    const changes = new Set();
+    const origIng = originalRecipe.ingredients || [];
+    const newIng = source.ingredients || [];
+    const origSteps = originalRecipe.steps || [];
+    const newSteps = source.steps || [];
+
+    // Find lines that are new or modified
+    const origIngSet = new Set(origIng.map(s => s.toLowerCase().trim()));
+    const changedIng = newIng.filter(s => !origIngSet.has(s.toLowerCase().trim()));
+    const origStepSet = new Set(origSteps.map(s => s.toLowerCase().trim()));
+    const changedStp = newSteps.filter(s => !origStepSet.has(s.toLowerCase().trim()));
+
+    if (changedIng.length > 0) changes.add('ingredients');
+    if (changedStp.length > 0) changes.add('steps');
+    if (source.title !== originalRecipe.title) changes.add('title');
+    if (source.description !== originalRecipe.description) changes.add('description');
+
+    return { changedFields: changes, changedIngredients: changedIng, changedSteps: changedStp };
+  }, [fromAudit, originalRecipe, source]);
   const isUrlMode = mode === 'url' && !source;
   const [title, setTitle] = useState(source?.title ?? '');
   const [description, setDescription] = useState(source?.description ?? '');
@@ -42,6 +68,7 @@ export default function EditRecipeScreen({ route, navigation }) {
   const [prepMinutes, setPrepMinutes] = useState(String(source?.prep_minutes ?? ''));
   const [cookMinutes, setCookMinutes] = useState(String(source?.cook_minutes ?? ''));
   const [servings, setServings] = useState(String(source?.servings ?? ''));
+  const [editedFields, setEditedFields] = useState(new Set());
   const [imageUrl, setImageUrl] = useState(source?.image_url ?? '');
   const [notes, setNotes] = useState(source?.notes ?? '');
   const [collection, setCollection] = useState(source?.collection ?? '');
@@ -131,6 +158,9 @@ export default function EditRecipeScreen({ route, navigation }) {
     try {
       if (existing) {
         await api.updateRecipe(existing.id, recipe);
+        invalidateRecipeAudits(existing.id);
+        invalidateRecipeNutrition(existing.id);
+        invalidateRecipePrep(existing.id);
       } else {
         await api.createRecipe(recipe);
       }
@@ -291,8 +321,25 @@ export default function EditRecipeScreen({ route, navigation }) {
           />
         </View>
 
+        {fromAudit && changedFields.size > 0 && (
+          <View style={{ backgroundColor: '#D32F2F15', borderRadius: 12, borderWidth: 1.5, borderColor: '#D32F2F40', padding: 12, marginBottom: 16 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#D32F2F', letterSpacing: 0.5 }}>
+              ✏️ TERRY CHANGED: {[...changedFields].map(f => f.toUpperCase()).join(', ')}
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>Highlighted fields have been modified — review and save</Text>
+          </View>
+        )}
+
         <View style={{ marginBottom: 16 }}>
           <Text style={[styles.fieldLabel, { fontFamily: MONO, color: colors.textMuted }]}>INGREDIENTS · ONE PER LINE</Text>
+          {changedIngredients.length > 0 && (
+            <View style={{ marginBottom: 8, backgroundColor: '#D32F2F10', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#D32F2F30' }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: '#D32F2F', letterSpacing: 0.5, marginBottom: 4 }}>TERRY ADDED:</Text>
+              {changedIngredients.map((ing, i) => (
+                <Text key={i} style={{ fontSize: 13, fontWeight: '700', color: '#D32F2F', lineHeight: 20 }}>• {ing}</Text>
+              ))}
+            </View>
+          )}
           <TextInput
             style={[styles.input, styles.tall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
             value={ingredients}
@@ -304,6 +351,14 @@ export default function EditRecipeScreen({ route, navigation }) {
 
         <View style={{ marginBottom: 16 }}>
           <Text style={[styles.fieldLabel, { fontFamily: MONO, color: colors.textMuted }]}>STEPS · ONE PER LINE</Text>
+          {changedSteps.length > 0 && (
+            <View style={{ marginBottom: 8, backgroundColor: '#D32F2F10', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#D32F2F30' }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: '#D32F2F', letterSpacing: 0.5, marginBottom: 4 }}>TERRY ADDED:</Text>
+              {changedSteps.map((step, i) => (
+                <Text key={i} style={{ fontSize: 13, fontWeight: '700', color: '#D32F2F', lineHeight: 20 }}>• {step}</Text>
+              ))}
+            </View>
+          )}
           <TextInput
             style={[styles.input, styles.tall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
             value={steps}

@@ -27,6 +27,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AiDisclaimer from '../components/AiDisclaimer';
 import { useAi } from '../aiContext';
 import { useResponsive } from '../utils/responsive';
+import { fmtClock } from '../utils/timerUtils';
 
 
 const fireImg = require('../../assets/fire.jpeg');
@@ -73,11 +74,7 @@ function parseTimerMins(text) {
   return found.length > 0 ? found[0].minutes : null;
 }
 
-function fmtClock(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
+
 
 // ─── Constants ───────────────────────────────────────────────────
 
@@ -448,7 +445,7 @@ export default function CookModeScreen({ route, navigation }) {
       </Text>
 
       {/* Nav buttons */}
-      <View style={styles.navRow}>
+      <View style={[styles.navRow, { paddingBottom: 90 + insets.bottom }]}>
         <Pressable
           style={[styles.prevBtn, { borderColor: colors.border }, ci === 0 && { opacity: 0.3 }]}
           onPress={goPrev}

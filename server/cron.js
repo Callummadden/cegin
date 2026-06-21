@@ -19,9 +19,7 @@ const { sendMorningDigest, sendPerishableAlert } = require('./notifications');
 let lastMorningDigest = null;    // 'YYYY-MM-DD'
 let lastPerishableCheck = null;  // 'YYYY-MM-DD-HH' (hour bucket)
 
-function getDateString() {
-  return dbModule.localDateStr();
-}
+const getDateString = dbModule.localDateStr;
 
 /**
  * Morning Digest Job

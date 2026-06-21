@@ -784,7 +784,6 @@ function normalizeRecipe(r) {
 async function consolidateShoppingList(recipes) {
   if (!recipes.length) return { categories: [] };
 
-  const recipeNames = recipes.map((r) => r.title);
   const ingredientLines = recipes.flatMap((r) =>
     r.ingredients.map((i) => `${i} (from ${r.title})`)
   );
@@ -890,14 +889,16 @@ async function auditRecipe(recipe, dietaryProfiles) {
   }
 
   const instruction =
-    'You are a nutritionist and food scientist. Audit the given recipe against each ' +
-    'dietary profile below. For each person: ' +
+    'You are a nutritionist and food scientist. Audit the given recipe against EACH dietary profile listed below. ' +
+    'IMPORTANT: Only audit for the exact people listed in the dietary profiles. Do NOT invent, add, or hallucinate ' +
+    'additional people. If 3 profiles are given, return exactly 3 audit entries — no more, no less. ' +
+    'Use the exact "person" name from each profile. For each person: ' +
     '- Check every ingredient against their dietary needs ' +
     '- Flag potential irritants, allergens, or problem ingredients ' +
-    '- Suggest specific micro-substitutions (e.g., "swap butter for ghee" or ' +
-    '  "use coconut aminos instead of soy sauce") that maintain the dish\'s character ' +
+    '- Suggest specific micro-substitutions with exact quantities (e.g., "swap 100g butter for 100g ghee" or ' +
+    '  "use 2 tbsp coconut aminos instead of 2 tbsp soy sauce") that maintain the dish\'s character ' +
     '- Rate compatibility: "safe", "needs-modification", or "not-suitable" ' +
-    '- If the recipe needs modification, provide a short list of exact swaps ' +
+    '- If the recipe needs modification, provide a short list of exact swaps with quantities ' +
     'Be precise — don\'t flag things that are actually fine (e.g., rice is gluten-free). ' +
     'Consider hidden ingredients too (e.g., stock may contain gluten, some sauces have dairy). ' +
     'Return JSON: { "audit": [ { "person": "name", "rating": "safe|needs-modification|not-suitable", ' +
@@ -1052,7 +1053,7 @@ async function estimateNutrition(recipe) {
       { role: 'system', content: instruction },
       { role: 'user', content: userMsg },
     ],
-    { json: true, temperature: 0.2 }
+    { json: true, temperature: 0 }
   );
 
   let parsed;
@@ -1111,7 +1112,7 @@ async function generatePrepSteps(recipe) {
 
 // ─── Fridge scan (flexible Vision) ─────────────────────────────────────────
 
-async function callVisionModel(imageBase64, prompt) {
+async function callVisionModel(imageBase64, prompt, { timeout = 30000, maxTokens = 400 } = {}) {
   if (!VISION_API_KEY) {
     const err = new Error('No vision API key configured. Set VISION_API_KEY (or GOOGLE_API_KEY).');
     err.status = 503;
@@ -1131,8 +1132,8 @@ async function callVisionModel(imageBase64, prompt) {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${VISION_API_KEY}` },
-      body: JSON.stringify({ model: VISION_MODEL, messages, temperature: 0.2, max_tokens: 400 }),
-      signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({ model: VISION_MODEL, messages, temperature: 0.2, max_tokens: maxTokens }),
+      signal: AbortSignal.timeout(timeout),
     });
     if (!res.ok) {
       let detail = ''; try { const b = await res.json(); detail = b.error?.message || JSON.stringify(b); } catch { detail = await res.text().catch(()=> ''); }
@@ -1160,7 +1161,7 @@ async function callVisionModel(imageBase64, prompt) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(timeout),
   });
 
   if (!res.ok) {
@@ -1172,7 +1173,11 @@ async function callVisionModel(imageBase64, prompt) {
   }
 
   const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+async function scanFridge(imageBase64) {
+  const text = await callVisionModel(imageBase64);
   let ingredients;
   try { ingredients = JSON.parse(text); } catch {
     const match = text.match(/\[[\s\S]*\]/);
@@ -1181,81 +1186,12 @@ async function callVisionModel(imageBase64, prompt) {
   return { ingredients: Array.isArray(ingredients) ? ingredients : [] };
 }
 
-async function scanFridge(imageBase64) {
-  return callVisionModel(imageBase64);
-}
-
 // ─── Scan recipe image with vision ────────────────────────────────────────
 
+const SCAN_RECIPE_PROMPT = 'You are looking at a photo of a recipe (from a cookbook, printed page, or screen). Extract the recipe information and return it as JSON with these fields: title (string), description (string, 1-2 sentences), ingredients (array of strings, one per line with quantity), steps (array of strings, one instruction per step in order), tags (array of short lowercase tags - cuisine, course, key ingredient), prep_minutes (number), cook_minutes (number), servings (number). If you cannot determine a numeric field, use 0 for minutes and 1 for servings. Be thorough with ingredients and steps. Do not invent content that is not visible.';
+
 async function scanRecipeImage(imageBase64) {
-  if (!VISION_API_KEY) {
-    const err = new Error('No vision API key configured. Set VISION_API_KEY (or GOOGLE_API_KEY).');
-    err.status = 503;
-    throw err;
-  }
-
-  const prompt =
-    'You are looking at a photo of a recipe (from a cookbook, printed page, or screen). ' +
-    'Extract the recipe information and return it as JSON with these fields: ' +
-    'title (string), description (string, 1-2 sentences), ' +
-    'ingredients (array of strings, one per line with quantity), ' +
-    'steps (array of strings, one instruction per step in order), ' +
-    'tags (array of short lowercase tags - cuisine, course, key ingredient), ' +
-    'prep_minutes (number), cook_minutes (number), servings (number). ' +
-    'If you cannot determine a numeric field, use 0 for minutes and 1 for servings. ' +
-    'Be thorough with ingredients and steps. Do not invent content that isn\'t visible.';
-
-  let rawText;
-  if (VISION_PROVIDER === 'openai-compatible' || VISION_PROVIDER === 'openai') {
-    const base = (readConfig('VISION_BASE_URL') || 'https://api.openai.com/v1').replace(/\/+$/, '');
-    const url = `${base}/chat/completions`;
-    const messages = [{
-      role: 'user',
-      content: [
-        { type: 'text', text: prompt },
-        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
-      ],
-    }];
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${VISION_API_KEY}` },
-      body: JSON.stringify({ model: VISION_MODEL, messages, temperature: 0.2, max_tokens: 1500 }),
-      signal: AbortSignal.timeout(45000),
-    });
-    if (!res.ok) {
-      let detail = ''; try { const b = await res.json(); detail = b.error?.message || JSON.stringify(b); } catch { detail = await res.text().catch(() => ''); }
-      const err = new Error(`Vision request failed (${res.status})${detail ? `: ${detail}` : ''}`); err.status = 502; throw err;
-    }
-    const data = await res.json();
-    rawText = data.choices?.[0]?.message?.content || '{}';
-  } else {
-    // Gemini
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${VISION_MODEL}:generateContent?key=${VISION_API_KEY}`;
-    const body = {
-      contents: [{
-        parts: [
-          { text: prompt },
-          { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } }
-        ]
-      }],
-      generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
-    };
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45000),
-    });
-    if (!res.ok) {
-      let detail = '';
-      try { const errBody = await res.json(); detail = errBody.error?.message || JSON.stringify(errBody); } catch { detail = await res.text().catch(() => ''); }
-      const err = new Error(`Gemini vision failed (${res.status})${detail ? `: ${detail}` : ''}`);
-      err.status = 502;
-      throw err;
-    }
-    const data = await res.json();
-    rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  }
+  const rawText = await callVisionModel(imageBase64, SCAN_RECIPE_PROMPT, { timeout: 45000, maxTokens: 1500 });
 
   let parsed;
   try {
@@ -1263,6 +1199,39 @@ async function scanRecipeImage(imageBase64) {
   } catch {
     const m = rawText.match(/\{[\s\S]*\}/);
     parsed = m ? JSON.parse(m[0]) : {};
+  }
+  return normalizeRecipe(parsed);
+}
+
+// Apply dietary substitutions to a recipe
+async function applySubstitutions(recipe, substitutions) {
+  const instruction =
+    'You are modifying a recipe to accommodate dietary needs. Apply ALL of the ' +
+    'following substitutions to the recipe. Each substitution includes a specific quantity — ' +
+    'match the exact quantity when replacing the ingredient. Return the complete modified recipe as JSON ' +
+    'with these fields: title (string), description (string), ingredients (array of strings, each with quantity), ' +
+    'steps (array of strings), tags (array), prep_minutes (number), cook_minutes (number), ' +
+    'servings (number). Keep the recipe as close to the original as possible — only change ' +
+    'what the substitutions require. Return ONLY the JSON object.';
+
+  const subList = substitutions.map((s, i) => (i + 1) + '. ' + s).join('\n');
+  const context = 'Original recipe:\n' + JSON.stringify(normalizeRecipe(recipe)) + '\n\nSubstitutions to apply:\n' + subList;
+
+  const content = await callTextModel(
+    [
+      { role: 'system', content: instruction },
+      { role: 'user', content: context },
+    ],
+    { json: true, temperature: 0.3 }
+  );
+
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    const err = new Error('AI returned a malformed recipe. Try again.');
+    err.status = 502;
+    throw err;
   }
   return normalizeRecipe(parsed);
 }
@@ -1283,6 +1252,7 @@ module.exports = {
   generatePrepSteps,
   scanFridge,
   scanRecipeImage,
+  applySubstitutions,
   setTextModel,
   setVisionModel,
   getTextModel,

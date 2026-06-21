@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './api';
+import { invalidateAllAudits } from './auditCache';
 import { getAppMode } from './config';
 
 const PROFILES_KEY = 'cegin_dietary_profiles';
@@ -43,6 +44,7 @@ export async function getDietaryProfiles(forceRefresh = false) {
 export async function saveDietaryProfiles(profiles) {
   _profilesCache = profiles;
   await AsyncStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+  invalidateAllAudits();
 
   if (await isServerMode()) {
     try {
@@ -83,6 +85,7 @@ export async function removeDietaryProfile(id) {
 export async function clearDietaryProfiles() {
   _profilesCache = null;
   await AsyncStorage.removeItem(PROFILES_KEY);
+  invalidateAllAudits();
 
   if (await isServerMode()) {
     try {
@@ -152,4 +155,5 @@ export const ACTIVITY_LEVELS = [
 
 export function clearCache() {
   _profilesCache = null;
+  _activityCache = null;
 }

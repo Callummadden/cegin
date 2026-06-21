@@ -48,11 +48,9 @@ async function save(plan) {
   await AsyncStorage.setItem(KEY, JSON.stringify(plan));
   // Sync to server
   const serverMode = await isServerMode();
-  console.log('[MealPlan] save() called, serverMode:', serverMode);
   if (serverMode) {
     try {
-      const result = await api.syncMealPlan(plan);
-      console.log('[MealPlan] Server sync success:', result);
+      await api.syncMealPlan(plan);
     } catch (e) {
       console.error('[MealPlan] Server sync failed:', e.message);
     }

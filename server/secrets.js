@@ -45,9 +45,7 @@ function readSecret(name) {
  * comes from env vars.
  */
 function readConfig(name, defaultValue = '') {
-  const secret = readSecret(name);
-  if (secret) return secret;
-  return process.env[name] || defaultValue;
+  return readSecret(name) || defaultValue;
 }
 
 module.exports = { readSecret, readConfig };

@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
   FlatList,
   KeyboardAvoidingView,
   Modal,
-  PanResponder,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -27,81 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useResponsive } from '../utils/responsive';
 
-const DELETE_WIDTH = 80;
-
-const swipeStyles = StyleSheet.create({
-
-  outer: { position: 'relative', overflow: 'hidden' },
-  deleteBg: {
-    position: 'absolute', top: 0, right: 0, bottom: 0,
-    width: DELETE_WIDTH,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E5645B',
-    borderRadius: 20,
-    zIndex: 0,
-  },
-  deleteBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 20,
-  },
-  deleteText: { color: '#fff', fontWeight: '700', fontSize: 11 },
-
-  });
-
-function SwipeableRow({ onDelete, children, colors }) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const isOpen = useRef(false);
-  const onDeleteRef = useRef(onDelete);
-  useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 12 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
-      onPanResponderMove: (_, gs) => {
-        const next = isOpen.current ? -DELETE_WIDTH + gs.dx : gs.dx;
-        translateX.setValue(Math.min(0, Math.max(-DELETE_WIDTH, next)));
-      },
-      onPanResponderRelease: (_, gs) => {
-        const dx = isOpen.current ? -DELETE_WIDTH + gs.dx : gs.dx;
-        if (dx < -60 || gs.vx < -0.5) {
-          Animated.timing(translateX, { toValue: -DELETE_WIDTH, duration: 150, useNativeDriver: false }).start(() => {
-            isOpen.current = false;
-            translateX.setValue(0);
-            onDeleteRef.current();
-          });
-        } else {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: false, tension: 200, friction: 20 }).start();
-          isOpen.current = false;
-        }
-      },
-    })
-  ).current;
-
-  const closeAndDelete = () => {
-    Animated.timing(translateX, { toValue: 0, duration: 200, useNativeDriver: false }).start(() => {
-      isOpen.current = false;
-      onDeleteRef.current();
-    });
-  };
-
-  return (
-    <View style={swipeStyles.outer}>
-      <View style={swipeStyles.deleteBg}>
-        <TouchableOpacity style={swipeStyles.deleteBtn} onPress={closeAndDelete} activeOpacity={0.7}>
-          <Text style={swipeStyles.deleteText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-      <Animated.View
-        style={{ transform: [{ translateX }], backgroundColor: colors?.background || '#131010', zIndex: 1 }}
-        {...panResponder.panHandlers}
-      >
-        {children}
-      </Animated.View>
-    </View>
-  );
-}
+import SwipeableRow from '../components/SwipeableRow';
 
 function formatDate(iso) {
   const d = new Date(iso);
@@ -195,14 +118,7 @@ export default function CookbookScreen({ navigation }) {
     setTopRecipes(cachedStats.topRecipes || []);
     setStreak(cachedStats.streak || 0);
 
-    if (!forceRefresh) {
-      getCookbook().then(setEntries).catch(() => {});
-      getStats().then(s => { setStats(s); setTopRecipes(s.topRecipes || []); setStreak(s.streak || 0); }).catch(() => {});
-      api.listRecipes().then(setRecipes).catch(() => {});
-    }
-    if (forceRefresh) {
-      api.listRecipes(null, { forceRefresh: true }).then(setRecipes).catch(() => {});
-    }
+    api.listRecipes(null, forceRefresh ? { forceRefresh: true } : undefined).then(setRecipes).catch(() => {});
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -325,9 +241,18 @@ export default function CookbookScreen({ navigation }) {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: 20 + insets.top }]}>
         <Text style={[styles.screenTitle, { color: colors.text }]}>KITCHEN LOG</Text>
-        <View style={[styles.streakBadge, { borderColor: streak > 0 ? colors.success : colors.border, backgroundColor: colors.surface }]}>
-          <Text style={styles.streakEmoji}>🔥</Text>
-          <Text style={[styles.streakNum, { fontFamily: MONO, color: streak > 0 ? colors.success : colors.textMuted }]}>{streak}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Pressable
+            onPress={handleRefresh}
+            hitSlop={8}
+            style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ fontSize: 14, color: colors.textMuted, lineHeight: 16, textAlign: 'center', includeFontPadding: false }}>↻</Text>
+          </Pressable>
+          <View style={[styles.streakBadge, { borderColor: streak > 0 ? colors.success : colors.border, backgroundColor: colors.surface }]}>
+            <Text style={styles.streakEmoji}>🔥</Text>
+            <Text style={[styles.streakNum, { fontFamily: MONO, color: streak > 0 ? colors.success : colors.textMuted }]}>{streak}</Text>
+          </View>
         </View>
       </View>
 

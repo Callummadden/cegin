@@ -59,8 +59,7 @@ function rowToRecipe(row) {
 // S2-14: Whitelist of allowed fields for updateRecipe
 const RECIPE_ALLOWED_FIELDS = new Set([
   'title', 'description', 'ingredients', 'steps', 'tags',
-  'cookTime', 'prepTime', 'servings', 'image',
-  'prep_minutes', 'cook_minutes', 'image_url', 'notes', 'collection',
+  'prep_minutes', 'cook_minutes', 'servings', 'image_url', 'notes', 'collection',
 ]);
 
 // S2-7: listRecipes scoped by userId

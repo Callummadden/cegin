@@ -1,5 +1,4 @@
 import * as SQLite from 'expo-sqlite';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let _db = null;
 

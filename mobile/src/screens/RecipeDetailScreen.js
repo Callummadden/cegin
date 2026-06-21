@@ -26,10 +26,13 @@ import { scaleIngredients } from '../utils/scaleIngredients';
 import { heroCardColors, hashStr } from '../utils/heroColors';
 import { addItems } from '../shoppingList';
 import { getDietaryProfiles } from '../dietProfiles';
+import { getCachedAudit, setCachedAudit, getCachedNutrition, setCachedNutrition, getCachedPrep, setCachedPrep } from '../auditCache';
+import { estimateNutrition as usdaEstimate, getAllergens } from '../usdaNutrition';
 import { TextSkeleton } from '../components/Skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAi } from '../aiContext';
 import { useResponsive } from '../utils/responsive';
+import { fmtClock } from '../utils/timerUtils';
 
 
 
@@ -48,11 +51,7 @@ function parseTimerMins(text) {
   return null;
 }
 
-function fmtClock(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
+
 
 
 
@@ -90,6 +89,12 @@ export default function RecipeDetailScreen({ route, navigation }) {
   const [auditing, setAuditing] = useState(false);
   const [auditResult, setAuditResult] = useState(null);
   const [auditError, setAuditError] = useState(null);
+  const [allergenFlags, setAllergenFlags] = useState(null);
+  const [subPickerVisible, setSubPickerVisible] = useState(false);
+  const [subOptions, setSubOptions] = useState([]); // [{original, options: [str], selected: idx, custom: ''}]
+  const [customSubText, setCustomSubText] = useState('');
+  const [applyingSubs, setApplyingSubs] = useState(false);
+  const [auditCollapsed, setAuditCollapsed] = useState(false);
 
   // Step timers: { [stepIndex]: { left, total, running, done } }
   const [timers, setTimers] = useState({});
@@ -112,22 +117,53 @@ export default function RecipeDetailScreen({ route, navigation }) {
         .then(async (r) => {
           setRecipe(r);
           setServings(r.servings);
+          // Load cached nutrition and prep steps if available
+          const [cachedNut, cachedPrep] = await Promise.all([
+            getCachedNutrition(id, r.updated_at),
+            getCachedPrep(id, r.updated_at),
+          ]);
+          if (cachedNut) setNutrition(cachedNut);
+          if (cachedPrep) setPrepSteps(cachedPrep);
           const favs = await getFavorites();
           setIsFav(!!favs[id]);
+          // Run local allergen check (instant, no API needed)
+          try {
+            const usdaResult = await usdaEstimate(r.ingredients);
+            console.log('[Allergen] USDA matched:', usdaResult?.matched?.length || 0, 'ingredients');
+            if (usdaResult && usdaResult.matched.length > 0) {
+              const fdcIds = usdaResult.matched.map(m => m.fdc_id).filter(Boolean);
+              console.log('[Allergen] fdcIds:', fdcIds.length);
+              if (fdcIds.length > 0) {
+                const flags = await getAllergens(fdcIds);
+                console.log('[Allergen] flags:', JSON.stringify(flags));
+                if (flags) setAllergenFlags(flags);
+              }
+            }
+          } catch (e) { console.error('[Allergen] Error:', e.message); }
+
           // Auto-trigger dietary audit if profiles exist (skip if AI disabled)
           if (!noAI) {
           const profiles = await getDietaryProfiles();
           if (profiles.length > 0) {
-            setAuditing(true);
-            setAuditError(null);
-            setAuditResult(null);
-            try {
-              const result = await api.auditRecipe({ recipe: r, dietaryProfiles: profiles });
-              setAuditResult(result);
-            } catch (e) {
-              setAuditError(e.message);
-            } finally {
-              setAuditing(false);
+            // Check cache first
+            const cached = await getCachedAudit(id, profiles, r.updated_at);
+            if (cached) {
+              setAuditResult(cached);
+              setAuditCollapsed(cached.audit?.every(e => e.rating === 'safe'));
+            } else {
+              setAuditing(true);
+              setAuditError(null);
+              setAuditResult(null);
+              try {
+                const result = await api.auditRecipe({ recipe: r, dietaryProfiles: profiles });
+                setAuditResult(result);
+                setAuditCollapsed(result.audit?.every(e => e.rating === 'safe'));
+                setCachedAudit(id, profiles, r.updated_at, result);
+              } catch (e) {
+                setAuditError(e.message);
+              } finally {
+                setAuditing(false);
+              }
             }
           }
           }
@@ -361,6 +397,41 @@ export default function RecipeDetailScreen({ route, navigation }) {
         )}
 
         <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+          {/* Allergen flags — instant local check */}
+          {allergenFlags && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+              {allergenFlags.contains_gluten && (
+                <View style={{ backgroundColor: '#F57F17', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>🌾 GLUTEN</Text>
+                </View>
+              )}
+              {allergenFlags.contains_dairy && (
+                <View style={{ backgroundColor: '#F57F17', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>🥛 DAIRY</Text>
+                </View>
+              )}
+              {allergenFlags.contains_nuts && (
+                <View style={{ backgroundColor: colors.danger, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>🥜 NUTS</Text>
+                </View>
+              )}
+              {allergenFlags.contains_soy && (
+                <View style={{ backgroundColor: '#F57F17', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>🫘 SOY</Text>
+                </View>
+              )}
+              {allergenFlags.contains_eggs && (
+                <View style={{ backgroundColor: '#F57F17', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>🥚 EGGS</Text>
+                </View>
+              )}
+              {allergenFlags.contains_shellfish && (
+                <View style={{ backgroundColor: colors.danger, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>🦐 SHELLFISH</Text>
+                </View>
+              )}
+            </View>
+          )}
           {/* Dietary audit */}
           {auditing && (
             <View style={styles.auditLoading}>
@@ -371,9 +442,54 @@ export default function RecipeDetailScreen({ route, navigation }) {
           {auditError && (
             <Text style={{ color: colors.danger, fontSize: 13, marginTop: 10 }}>{auditError}</Text>
           )}
-          {auditResult && (
+          {auditResult && auditCollapsed && (
+            <Pressable
+              onPress={() => setAuditCollapsed(false)}
+              style={[styles.auditCard, { backgroundColor: colors.surface, borderColor: colors.success, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 }]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 14, color: colors.success }}>✓</Text>
+                <Text style={[styles.auditTitle, { color: colors.success, marginBottom: 0 }]}>DIETARY AUDIT — ALL SAFE</Text>
+              </View>
+              <Text style={{ fontSize: 12, color: colors.textMuted }}>TAP TO EXPAND</Text>
+            </Pressable>
+          )}
+          {auditResult && !auditCollapsed && (
             <View style={[styles.auditCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.auditTitle, { color: colors.text }]}>DIETARY AUDIT</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Pressable onPress={() => auditResult.audit?.every(e => e.rating === 'safe') && setAuditCollapsed(true)} style={{ flex: 1 }}>
+                  <Text style={[styles.auditTitle, { color: colors.text }]}>DIETARY AUDIT</Text>
+                </Pressable>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {auditResult.audit?.every(e => e.rating === 'safe') && (
+                    <Pressable onPress={() => setAuditCollapsed(true)} hitSlop={8} style={{ padding: 4 }}>
+                      <Text style={{ fontSize: 16, color: colors.textMuted }}>✕</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={async () => {
+                      const profiles = await getDietaryProfiles();
+                      if (!profiles.length || !recipe) return;
+                      setAuditing(true);
+                      setAuditError(null);
+                      try {
+                        const result = await api.auditRecipe({ recipe, dietaryProfiles: profiles });
+                        setAuditResult(result);
+                        setAuditCollapsed(result.audit?.every(e => e.rating === 'safe'));
+                        setCachedAudit(recipe.id, profiles, recipe.updated_at, result);
+                      } catch (e) {
+                        setAuditError(e.message);
+                      } finally {
+                        setAuditing(false);
+                      }
+                    }}
+                    hitSlop={8}
+                    style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Text style={{ fontSize: 14, color: colors.textMuted, lineHeight: 16, textAlign: 'center', includeFontPadding: false }}>↻</Text>
+                  </Pressable>
+                </View>
+              </View>
               <Text style={[styles.auditOverall, { color: colors.text2 }]}>{auditResult.overall}</Text>
               {auditResult.audit?.map((entry, i) => {
                 const ratingColor = entry.rating === 'safe' ? colors.success
@@ -413,6 +529,24 @@ export default function RecipeDetailScreen({ route, navigation }) {
               })}
             </View>
           )}
+          {auditResult && auditResult.audit?.some(e => e.substitutions?.length > 0) && (
+            <Pressable
+              style={[styles.cta, { backgroundColor: colors.primary, marginTop: 12 }]}
+              onPress={() => {
+                const allSubs = auditResult.audit.flatMap(e => e.substitutions || []);
+                // Parse each substitution into options (split on " or ", ", or ", " / ")
+                const parsed = allSubs.map(sub => {
+                  const parts = sub.split(/\s+or\s+|\s*\/\s*|,\s*or\s+/i).map(s => s.trim()).filter(Boolean);
+                  return { original: sub, options: parts.length > 1 ? parts : [sub], selected: 0, custom: '' };
+                });
+                setSubOptions(parsed);
+                setCustomSubText('');
+                setSubPickerVisible(true);
+              }}
+            >
+              <Text style={[styles.ctaText, { color: colors.onPrimary }]}>APPLY TERRY'S SUGGESTIONS</Text>
+            </Pressable>
+          )}
           {auditResult && <AiDisclaimer />}
 
 
@@ -429,9 +563,11 @@ export default function RecipeDetailScreen({ route, navigation }) {
             {(() => {
               const ings = recipe.ingredients?.length || 0;
               const steps = recipe.steps?.length || 0;
+              const totalMin = (recipe.prep_minutes || 0) + (recipe.cook_minutes || 0);
+              const score = ings + steps + (totalMin / 10);
               let label, bg;
-              if (ings <= 5 && steps <= 5) { label = 'EASY'; bg = colors.success; }
-              else if (ings <= 10 && steps <= 10) { label = 'MEDIUM'; bg = '#F57F17'; }
+              if (score <= 8) { label = 'EASY'; bg = colors.success; }
+              else if (score <= 18) { label = 'MEDIUM'; bg = '#F57F17'; }
               else { label = 'HARD'; bg = colors.danger; }
               return (
                 <View style={[styles.difficultyBadge, { backgroundColor: bg }]}>
@@ -497,13 +633,65 @@ export default function RecipeDetailScreen({ route, navigation }) {
                   onPress={async () => {
                     setLoadingNutrition(true);
                     try {
-                      const result = await api.estimateNutrition({ title: recipe.title, ingredients: recipe.ingredients, servings: recipe.servings });
-                      setNutrition(result.nutrition);
+                      const s = recipe.servings || 1;
+                      const usda = await usdaEstimate(recipe.ingredients);
+                      let result;
+                      if (usda && usda.matched.length > 0) {
+                        result = {
+                          calories: Math.round(usda.totals.calories / s),
+                          protein_g: Math.round(usda.totals.protein_g / s),
+                          carbs_g: Math.round(usda.totals.carbs_g / s),
+                          fat_g: Math.round(usda.totals.fat_g / s),
+                          fiber_g: Math.round(usda.totals.fiber_g / s),
+                          source: 'usda',
+                          matched: usda.matched.length,
+                          total: usda.processedCount || recipe.ingredients.length,
+                        };
+                      } else {
+                        const r = await api.estimateNutrition({ title: recipe.title, ingredients: recipe.ingredients, servings: recipe.servings });
+                        result = { ...r.nutrition, source: 'ai' };
+                      }
+                      setNutrition(result);
+                      setCachedNutrition(recipe.id, recipe.updated_at, result);
                     } catch (e) { console.warn('Nutrition estimation failed:', e.message); }
                     setLoadingNutrition(false);
                   }}
                 >
                   <Text style={[styles.nutritionBtnText, { color: colors.primary }]}>ESTIMATE</Text>
+                </Pressable>
+              )}
+              {nutrition && !loadingNutrition && (
+                <Pressable
+                  onPress={async () => {
+                    setLoadingNutrition(true);
+                    try {
+                      const s = recipe.servings || 1;
+                      const usda = await usdaEstimate(recipe.ingredients);
+                      let result;
+                      if (usda && usda.matched.length > 0) {
+                        result = {
+                          calories: Math.round(usda.totals.calories / s),
+                          protein_g: Math.round(usda.totals.protein_g / s),
+                          carbs_g: Math.round(usda.totals.carbs_g / s),
+                          fat_g: Math.round(usda.totals.fat_g / s),
+                          fiber_g: Math.round(usda.totals.fiber_g / s),
+                          source: 'usda',
+                          matched: usda.matched.length,
+                          total: usda.processedCount || recipe.ingredients.length,
+                        };
+                      } else {
+                        const r = await api.estimateNutrition({ title: recipe.title, ingredients: recipe.ingredients, servings: recipe.servings });
+                        result = { ...r.nutrition, source: 'ai' };
+                      }
+                      setNutrition(result);
+                      setCachedNutrition(recipe.id, recipe.updated_at, result);
+                    } catch (e) { console.warn('Nutrition estimation failed:', e.message); }
+                    setLoadingNutrition(false);
+                  }}
+                  hitSlop={8}
+                  style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center', marginTop: -8 }}
+                >
+                  <Text style={{ fontSize: 14, color: colors.textMuted, lineHeight: 16, textAlign: 'center', includeFontPadding: false }}>↻</Text>
                 </Pressable>
               )}
             </View>
@@ -529,6 +717,11 @@ export default function RecipeDetailScreen({ route, navigation }) {
                 {nutrition.summary ? (
                   <Text style={[styles.nutritionSummary, { color: colors.text2 }]}>{nutrition.summary}</Text>
                 ) : null}
+                <Text style={[styles.nutritionSummary, { color: colors.textMuted, fontSize: 10, marginTop: 6 }]}>
+                  {nutrition.source === 'usda'
+                    ? `📊 USDA Foundation Foods — ${nutrition.matched}/${nutrition.total} ingredients matched`
+                    : '🤖 AI estimated — values are approximate'}
+                </Text>
               </>
             )}
           </View>
@@ -636,11 +829,29 @@ export default function RecipeDetailScreen({ route, navigation }) {
                     try {
                       const result = await api.generatePrepSteps({ title: recipe.title, ingredients: recipe.ingredients, steps: recipe.steps });
                       setPrepSteps(result.steps);
+                      setCachedPrep(recipe.id, recipe.updated_at, result.steps);
                     } catch (e) { console.warn('Prep step generation failed:', e.message); }
                     setLoadingPrep(false);
                   }}
                 >
                   <Text style={[styles.prepGenBtnText, { color: colors.primary }]}>GENERATE</Text>
+                </Pressable>
+              )}
+              {prepSteps && !loadingPrep && (
+                <Pressable
+                  onPress={async () => {
+                    setLoadingPrep(true);
+                    try {
+                      const result = await api.generatePrepSteps({ title: recipe.title, ingredients: recipe.ingredients, steps: recipe.steps });
+                      setPrepSteps(result.steps);
+                      setCachedPrep(recipe.id, recipe.updated_at, result.steps);
+                    } catch (e) { console.warn('Prep step generation failed:', e.message); }
+                    setLoadingPrep(false);
+                  }}
+                  hitSlop={8}
+                  style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center', marginTop: -8 }}
+                >
+                  <Text style={{ fontSize: 14, color: colors.textMuted, lineHeight: 16, textAlign: 'center', includeFontPadding: false }}>↻</Text>
                 </Pressable>
               )}
             </View>
@@ -740,7 +951,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
       </ScrollView>
 
       {/* Sticky CTA */}
-      <View style={[styles.ctaWrap, { backgroundColor: colors.background }]}>
+      <View style={[styles.ctaWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         <Pressable
           style={[styles.cta, { backgroundColor: colors.primary }]}
           onPress={() => navigation.navigate('CookMode', { recipe })}
@@ -751,7 +962,115 @@ export default function RecipeDetailScreen({ route, navigation }) {
 
       <AppModal visible={!!modal} title={modal?.title} message={modal?.message} buttons={modal?.buttons ?? []} colors={colors} onClose={() => setModal(null)} />
 
+      {/* Applying substitutions loading overlay */}
+      {applyingSubs && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 16, letterSpacing: 0.5 }}>APPLYING TERRY'S SUGGESTIONS…</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 8 }}>This may take a few seconds</Text>
+          <Text style={{ color: '#D32F2F', fontSize: 12, marginTop: 16, fontWeight: '600' }}>Changes will be highlighted in red</Text>
+        </View>
+      )}
 
+      {/* Substitution picker modal */}
+      <Modal visible={subPickerVisible} transparent animationType="fade" onRequestClose={() => setSubPickerVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, padding: 20, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', letterSpacing: 0.5, marginBottom: 4, color: colors.text }}>TERRY'S SUGGESTIONS</Text>
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 16, fontFamily: MONO }}>Pick your preferred swaps or add your own</Text>
+            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+              {subOptions.map((sub, i) => (
+                <View key={i} style={{ marginBottom: 16, paddingBottom: 16, borderBottomWidth: i < subOptions.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1, color: colors.textMuted, marginBottom: 8 }}>SUGGESTION {i + 1}</Text>
+                  {sub.options.map((opt, oi) => (
+                    <Pressable
+                      key={oi}
+                      onPress={() => {
+                        const next = [...subOptions];
+                        next[i] = { ...next[i], selected: oi };
+                        setSubOptions(next);
+                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 }}
+                    >
+                      <View style={{
+                        width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                        borderColor: sub.selected === oi ? colors.primary : colors.border,
+                        alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {sub.selected === oi && (
+                          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary }} />
+                        )}
+                      </View>
+                      <Text style={{ flex: 1, fontSize: 14, color: colors.text, lineHeight: 20 }}>{opt}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ))}
+              {/* Custom entry */}
+              <View style={{ marginBottom: 8 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1, color: colors.textMuted, marginBottom: 8 }}>ADD YOUR OWN</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    style={{ flex: 1, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.text }}
+                    placeholder="e.g. swap sugar for stevia"
+                    placeholderTextColor={colors.textMuted}
+                    value={customSubText}
+                    onChangeText={setCustomSubText}
+                  />
+                  <Pressable
+                    onPress={() => {
+                      if (customSubText.trim()) {
+                        setSubOptions(prev => [...prev, { original: customSubText.trim(), options: [customSubText.trim()], selected: 0, custom: customSubText.trim() }]);
+                        setCustomSubText('');
+                      }
+                    }}
+                    style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.primary, justifyContent: 'center' }}
+                  >
+                    <Text style={{ color: colors.onPrimary, fontWeight: '700', fontSize: 13 }}>ADD</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </ScrollView>
+            {/* Action buttons */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <Pressable
+                onPress={() => setSubPickerVisible(false)}
+                style={{ flex: 1, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+              >
+                <Text style={{ fontWeight: '700', fontSize: 13, color: colors.text }}>CANCEL</Text>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  setSubPickerVisible(false);
+                  const selected = subOptions.map(s => s.options[s.selected]);
+                  if (selected.length === 0) return;
+                  setApplyingSubs(true);
+                  try {
+                    const result = await api.applySubstitutions({ recipe, substitutions: selected });
+                    if (result?.recipe) {
+                      // Preserve original image_url — AI doesn't return it
+                      navigation.navigate('EditRecipe', { recipe: { ...result.recipe, id: recipe.id, image_url: result.recipe.image_url || recipe.image_url }, fromAudit: true, originalRecipe: recipe });
+                    }
+                  } catch (e) {
+                    showToast({ message: 'Could not apply suggestions', duration: 3000 });
+                  } finally {
+                    setApplyingSubs(false);
+                  }
+                }}
+                style={{ flex: 1.5, borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.primary }}
+              >
+                {applyingSubs ? (
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
+                ) : (
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: colors.onPrimary }}>APPLY SELECTED</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Quick notes modal */}
       <Modal visible={notesModal} transparent animationType="fade" onRequestClose={() => setNotesModal(false)}>
@@ -839,8 +1158,6 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   statDivider: { borderLeftWidth: 1, paddingLeft: s(18) },
   statNum: { fontSize: fs(29), fontWeight: '900' },
   statLabel: { fontSize: fs(10), letterSpacing: 1, marginTop: s(2) },
-  servingsRow: { flexDirection: 'row', alignItems: 'center', gap: s(14) },
-  servBtn: { fontSize: fs(22), fontWeight: '700' },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -870,13 +1187,6 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
   prepStep: { flexDirection: 'row', alignItems: 'flex-start', gap: s(10) },
   prepStepNum: { fontSize: fs(13), fontWeight: '900', width: s(20), textAlign: 'right' },
   prepStepText: { fontSize: fs(14), lineHeight: fs(20), flex: 1 },
-  prepGrid: { flexDirection: 'row', justifyContent: 'space-between', marginTop: s(8) },
-  prepItem: { alignItems: 'center', flex: 1 },
-  prepValue: { fontSize: fs(16), fontWeight: '900' },
-  prepLabel: { fontSize: fs(9), letterSpacing: 1, marginTop: s(2) },
-  prepNotes: { marginTop: s(14), paddingTop: s(12), borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
-  prepNotesLabel: { fontSize: fs(9), letterSpacing: 1.5, marginBottom: s(6) },
-  prepNotesText: { fontSize: fs(14), lineHeight: fs(21) },
   // Serving adjuster
   servingAdjuster: {
     flexDirection: 'row',
@@ -988,8 +1298,8 @@ const makeStyles = (colors, s, fs) => StyleSheet.create({
     alignItems: 'center',
   },
   actionBtnText: { fontWeight: '700', fontSize: fs(13), letterSpacing: 1 },
-  ctaWrap: { paddingHorizontal: s(16), paddingVertical: s(10) },
-  cta: { borderRadius: s(28), paddingVertical: s(17), alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: s(4) }, elevation: 6 },
+  ctaWrap: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: s(16), paddingVertical: s(10), zIndex: 20 },
+  cta: { borderRadius: s(28), paddingVertical: s(17), alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: s(4) }, elevation: 6, marginHorizontal: s(20) },
 
   shareBtn: {
     borderWidth: 1.5,

@@ -1,16 +1,11 @@
-import { useMemo, useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimers } from '../timerContext';
 import { MONO, useTheme } from '../theme';
 import { useResponsive } from '../utils/responsive';
+import { fmtClock } from '../utils/timerUtils';
 import { useNavigation } from '@react-navigation/native';
-
-function fmtClock(secs) {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
 
 export default function GlobalTimerBar() {
   const { timers, activeRecipe, activeStep, pauseTimer, resumeTimer, cancelTimer } = useTimers();
