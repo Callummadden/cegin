@@ -34,6 +34,11 @@ const net = require('net');
 const dns = require('dns').promises;
 const { WebSocketServer } = require('ws');
 
+const isProduction = process.env.NODE_ENV === 'production';
+function debugLog(...args) {
+  if (!isProduction) console.log(...args);
+}
+
 const app = express();
 
 // --- CORS (S2-1: only reflect allowed origins) ---
@@ -115,12 +120,19 @@ const bodyParser1mb = express.json({ limit: '1mb' });
 const bodyParser5mb = express.json({ limit: '5mb' });
 const bodyParser20mb = express.json({ limit: '20mb' });
 
+// Helper to get the route path consistently (handles middleware mounting)
+function getRoutePath(req) {
+  const p = req.originalUrl ? req.originalUrl.split('?')[0] : req.path;
+  return p;
+}
+
 // S2-11: Single body parser middleware — 20mb for scan-fridge, 5mb for cookbook and recipe save, 1mb for everything else
 app.use((req, res, next) => {
-  if (req.path === '/api/ai/scan-fridge') {
+  const route = getRoutePath(req);
+  if (route === '/api/ai/scan-fridge') {
     return bodyParser20mb(req, res, next);
   }
-  if (req.path.startsWith('/api/cookbook') || req.method === 'POST' && req.path === '/api/recipes' || req.method === 'PUT' && req.path.match(/^\/api\/recipes\/\d+$/)) {
+  if (route.startsWith('/api/cookbook') || (req.method === 'POST' && route === '/api/recipes') || (req.method === 'PUT' && route.match(/^\/api\/recipes\/\d+$/))) {
     return bodyParser5mb(req, res, next);
   }
   bodyParser1mb(req, res, next);
@@ -128,11 +140,14 @@ app.use((req, res, next) => {
 
 // --- Auth middleware applied to all non-auth, non-health routes ---
 app.use('/api', (req, res, next) => {
-  // Skip auth for /api/auth/* and /api/health and /api/ai/status
+  const route = getRoutePath(req);
+  // Skip auth for /api/auth/* , /api/health and /api/ai/status (and /ai/status subpath inside mount)
   if (
-    req.path.startsWith('/auth/') ||
-    req.path === '/health' ||
-    req.path === '/ai/status'
+    route.startsWith('/api/auth/') ||
+    route === '/api/health' ||
+    route === '/api/ai/status' ||
+    route === '/health' ||           // inside /api mount
+    route === '/ai/status'           // inside /api mount
   ) {
     return next();
   }
@@ -144,7 +159,7 @@ app.use('/api', (req, res, next) => {
 const SERVER_VERSION = require('./package.json').version;
 const MIN_CLIENT_VERSION = '1.1.5';    // oldest client that works with this server
 const LATEST_CLIENT_VERSION = '1.3.1'; // newest published client
-const LATEST_SERVER_VERSION = '1.3.1'; // bump this when you release a new server
+const LATEST_SERVER_VERSION = '1.3.1'; // keep in sync with server/package.json + mobile/app.json on releases
 app.get('/api/health', (req, res) => res.json({
   ok: true,
   serverVersion: SERVER_VERSION,
@@ -1105,7 +1120,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws) => {
-  console.log(`[WS] Client connected (${wss.clients.size} total)`);
+  debugLog(`[WS] Client connected (${wss.clients.size} total)`);
   ws.isAlive = true;
   ws.on('message', (data) => {
     try {
@@ -1115,7 +1130,7 @@ wss.on('connection', (ws) => {
       }
     } catch {}
   });
-  ws.on('close', () => console.log(`[WS] Client disconnected (${wss.clients.size} total)`));
+  ws.on('close', () => debugLog(`[WS] Client disconnected (${wss.clients.size} total)`));
   ws.on('error', (err) => console.error('[WS] Error:', err.message));
   ws.on('pong', () => { ws.isAlive = true; });
 });
@@ -1124,7 +1139,7 @@ wss.on('connection', (ws) => {
 setInterval(() => {
   for (const client of wss.clients) {
     if (client.isAlive === false) {
-      console.log('[WS] Terminating stale client');
+      debugLog('[WS] Terminating stale client');
       client.terminate();
     }
     client.isAlive = false;

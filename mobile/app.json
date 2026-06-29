@@ -6,9 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "backgroundColor": "#0E0E0E"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "kitchen.cegin.app"
@@ -51,7 +48,16 @@
       "./plugins/withCleartextTraffic.js",
       "./plugins/materialYou.js",
       "./plugins/withExactAlarm.js",
-      "expo-asset"
+      "expo-asset",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0E0E0E",
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain"
+        }
+      ]
     ]
   }
 }
