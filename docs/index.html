@@ -947,24 +947,19 @@ docker compose up -d</div>
             <h3>v1.3.2</h3>
             <span class="changelog-status released">Released</span>
           </div>
-          <p class="changelog-date mono">June 21, 2026</p>
+          <p class="changelog-date mono">June 29, 2026</p>
           <ul>
-            <li>Server: nutrition endpoint now returns result — fixed missing res.json() in success path</li>
-            <li>Server: /api/auth/me returns 401 instead of crashing 500 when no token</li>
-            <li>Server: meal planner accepts client goal param and passes it to AI prompt</li>
-            <li>Server: image-proxy SSRF protection — validates URL scheme, blocks private IPs</li>
-            <li>Server: vision model OpenAI path returns JSON string — fixes empty fridge scan results</li>
-            <li>Server: collections uniqueness scoped per user</li>
-            <li>Mobile: Terry meal plan actions land on correct day (date offset fix)</li>
-            <li>Mobile: AI nutrition fallback fixes undefined/zeros when USDA lookup fails</li>
-            <li>Mobile: local model shopping list accepts recipe arrays for consolidation</li>
-            <li>Mobile: USDA DB staleness check re-copies when bundled version increases</li>
-            <li>Mobile: offline temp IDs remapped after server sync</li>
-            <li>Mobile: optional Bearer auth header for server requests</li>
-            <li>Switched license from MIT to GPL-3.0</li>
-            <li>Added SPDX copyright headers to all 71 source files</li>
+            <li>Server: fixed healthcheck (localhost → 127.0.0.1) for BusyBox wget + IPv6 issue in Dockerfile and docker-compose.yml</li>
+            <li>Server: bumped to 1.3.2 and synced all LATEST_* version constants (eliminates false "outdated" warnings)</li>
+            <li>Server: refactored body-parser/auth middleware with getRoutePath() helper for reliable path matching</li>
+            <li>Server: improved npm test with real smoke tests (syntax + module loads)</li>
+            <li>Server: reduced noisy WS logs in production; rebuilt + pushed Docker image</li>
+            <li>Mobile: fixed Expo deps (expo-font peer + duplicates) and splash schema via expo-splash-screen plugin</li>
+            <li>Mobile: version bumped to 1.3.2 (versionCode 17); expo-doctor now passes 20/21 checks</li>
+            <li>Release: full process with git tag v1.3.2, commits, and direct APK</li>
           </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.3.2" target="_blank" rel="noopener noreferrer">Download v1.3.2 →</a>
+          <a href="Cegin-v1.3.2.apk">Download APK (v1.3.2)</a>
+          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.3.2" target="_blank" rel="noopener noreferrer" style="margin-left: 12px;">GitHub →</a>
         </article>
         <article class="changelog-card">
           <div class="changelog-header">
