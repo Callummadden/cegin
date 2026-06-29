@@ -34,4 +34,9 @@ USER node
 # and from other containers / phones on the LAN.
 EXPOSE 3000
 
+# Healthcheck for direct `docker run` users (and compose).
+# Uses 127.0.0.1 because BusyBox wget in alpine resolves "localhost" to IPv6 first.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
+
 CMD ["node", "index.js"]
