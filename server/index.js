@@ -158,7 +158,7 @@ app.use('/api', (req, res, next) => {
 // Also returns version info so the client can check if it's outdated
 const SERVER_VERSION = require('./package.json').version;
 const MIN_CLIENT_VERSION = '1.1.5';    // oldest client that works with this server
-const LATEST_CLIENT_VERSION = '1.3.1'; // newest published client
+const LATEST_CLIENT_VERSION = '1.3.2'; // newest published client
 const LATEST_SERVER_VERSION = '1.3.1'; // keep in sync with server/package.json + mobile/app.json on releases
 app.get('/api/health', (req, res) => res.json({
   ok: true,
