@@ -980,9 +980,10 @@ export default function RecipeListScreen({ navigation }) {
                 accessibilityRole="button"
                 >
                 <Text style={[styles.menuCancelText, { color: colors.text }]}>Cancel</Text>
+              </Pressable>
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
 
       {showTutorial && (
         <TutorialOverlay

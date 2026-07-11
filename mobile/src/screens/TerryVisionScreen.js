@@ -48,7 +48,7 @@ import { useResponsive } from '../utils/responsive';
 const SECTIONS = [
   { key: 'fridge', label: 'FRIDGE', icon: '🧊', desc: 'Snap the inside of your fridge' },
   { key: 'ambient', label: 'AMBIENT', icon: '🍽️', desc: 'Counter, pantry, or table' },
-  { key: 'freezer', label: 'FREEZER', icon: '❄️', desc: 'What\'s in the freezer' },
+  { key: 'freezer', label: 'FREEZER', icon: '❄️', desc: "What's in the freezer" },
 ];
 
 export default function TerryVisionScreen({ route, navigation }) {
@@ -127,7 +127,7 @@ export default function TerryVisionScreen({ route, navigation }) {
             if (Object.keys(verified).length) setScans(verified);
             if (data.suggestions) setSuggestions(data.suggestions);
           }
-        } catch (_e) { if (__DEV__) console.warn(\'[TerryVisionScreen] Caught error:\', _e.message); }
+        } catch (_e) { if (__DEV__) console.warn('[TerryVisionScreen] Caught error:', _e.message); }
       })();
       return () => { cancelled = true; };
     }, [])
@@ -269,8 +269,8 @@ export default function TerryVisionScreen({ route, navigation }) {
           return { ...prev, [sectionKey]: arr };
         });
         // Clean up the saved photo file
-        try { await FileSystem.deleteAsync(savedUri, { idempotent: true }); } catch (_e) { if (__DEV__) console.warn(\'[TerryVisionScreen] Caught error:\', _e.message); }
-        showToast({ message: 'Couldn\'t identify any items — try a clearer photo', color: '#ff4444', duration: 4000 });
+        try { await FileSystem.deleteAsync(savedUri, { idempotent: true }); } catch (_e) { if (__DEV__) console.warn('[TerryVisionScreen] Caught error:', _e.message); }
+        showToast({ message: "Couldn't identify any items — try a clearer photo", color: '#ff4444', duration: 4000 });
         return;
       }
 
@@ -331,7 +331,7 @@ export default function TerryVisionScreen({ route, navigation }) {
     const scan = scans[sectionKey]?.[scanIndex];
     // Delete from server if it has a server ID
     if (scan?.serverId) {
-      try { await api.deleteTerryVisionScan(scan.serverId); } catch (_e) { if (__DEV__) console.warn(\'[TerryVisionScreen] Caught error:\', _e.message); }
+      try { await api.deleteTerryVisionScan(scan.serverId); } catch (_e) { if (__DEV__) console.warn('[TerryVisionScreen] Caught error:', _e.message); }
     }
     setScans((prev) => {
       const arr = [...(prev[sectionKey] || [])];

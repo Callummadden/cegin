@@ -166,7 +166,7 @@ export async function deleteCookbookEntry(id) {
       await api.deleteCookbookEntry(id);
       // WebSocket broadcast will trigger getCookbook() to refresh the cache
       return;
-    } catch (_e) { if (__DEV__) console.warn(\'[cookbook] Caught error:\', _e.message); }
+    } catch (_e) { if (__DEV__) console.warn('[cookbook] Caught error:', _e.message); }
   }
 
   const list = await getCookbook();
@@ -179,7 +179,7 @@ export async function clearCookbook() {
   if (await isServerMode()) {
     try {
       await api.clearCookbook();
-    } catch (_e) { if (__DEV__) console.warn(\'[cookbook] Caught error:\', _e.message); }
+    } catch (_e) { if (__DEV__) console.warn('[cookbook] Caught error:', _e.message); }
   }
 
   await save([]);

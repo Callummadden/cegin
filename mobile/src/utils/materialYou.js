@@ -47,7 +47,7 @@ export async function getDeviceAccentColor() {
     if (color && color !== '#000000' && color !== '#FFFFFF') {
       return color;
     }
-  } catch (_e) { if (__DEV__) console.warn(\'[materialYou] Caught error:\', _e.message); }
+  } catch (_e) { if (__DEV__) console.warn('[materialYou] Caught error:', _e.message); }
   return null;
 }
 

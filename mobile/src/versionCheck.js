@@ -84,7 +84,7 @@ export async function checkVersions() {
       try {
         const raw = await AsyncStorage.getItem(VERSION_KEY);
         _status = raw ? JSON.parse(raw) : null;
-      } catch (_e) { if (__DEV__) console.warn(\'[versionCheck] Caught error:\', _e.message); }
+      } catch (_e) { if (__DEV__) console.warn('[versionCheck] Caught error:', _e.message); }
     }
     return _status;
   }

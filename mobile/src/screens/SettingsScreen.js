@@ -241,7 +241,7 @@ export default function SettingsScreen({ navigation }) {
   useEffect(() => {
     getServerUrl().then(setUrl);
     AsyncStorage.getItem('saved_servers').then((v) => {
-      try { if (v) setSavedServers(JSON.parse(v)); } catch (_e) { if (__DEV__) console.warn(\'[SettingsScreen] Caught error:\', _e.message); }
+      try { if (v) setSavedServers(JSON.parse(v)); } catch (_e) { if (__DEV__) console.warn('[SettingsScreen] Caught error:', _e.message); }
     });
     api.aiStatus().then(setAiStatus).catch(() => {});
     checkVersions().then(setVersionInfo).catch(() => {});
@@ -314,7 +314,7 @@ export default function SettingsScreen({ navigation }) {
     try {
       const res = await fetch(`${trimmed}/api/health`, { signal: AbortSignal.timeout(3000) });
       if (res.ok) label = trimmed;
-    } catch (_e) { if (__DEV__) console.warn(\'[SettingsScreen] Caught error:\', _e.message); }
+    } catch (_e) { if (__DEV__) console.warn('[SettingsScreen] Caught error:', _e.message); }
     const updated = [...savedServers, { url: trimmed, label, addedAt: Date.now() }];
     setSavedServers(updated);
     await AsyncStorage.setItem('saved_servers', JSON.stringify(updated));
@@ -712,7 +712,7 @@ export default function SettingsScreen({ navigation }) {
                       try {
                         const token = await getPushToken();
                         if (token) await api.registerPushToken(token);
-                      } catch (_e) { if (__DEV__) console.warn(\'[SettingsScreen] Caught error:\', _e.message); }
+                      } catch (_e) { if (__DEV__) console.warn('[SettingsScreen] Caught error:', _e.message); }
                     }
                   }}
                 >

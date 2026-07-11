@@ -205,7 +205,7 @@ export async function addRecipeToCollection(collectionId, recipeId) {
   const row = db.getFirstSync('SELECT recipe_ids FROM collections WHERE id = ?', [collectionId]);
   if (!row) throw new Error('Collection not found');
   let ids = [];
-  try { ids = JSON.parse(row.recipe_ids); } catch (_e) { if (__DEV__) console.warn(\'[localDb] Caught error:\', _e.message); }
+  try { ids = JSON.parse(row.recipe_ids); } catch (_e) { if (__DEV__) console.warn('[localDb] Caught error:', _e.message); }
   if (!ids.includes(recipeId)) {
     ids.push(recipeId);
     db.runSync('UPDATE collections SET recipe_ids = ? WHERE id = ?', [JSON.stringify(ids), collectionId]);
@@ -218,7 +218,7 @@ export async function removeRecipeFromCollection(collectionId, recipeId) {
   const row = db.getFirstSync('SELECT recipe_ids FROM collections WHERE id = ?', [collectionId]);
   if (!row) throw new Error('Collection not found');
   let ids = [];
-  try { ids = JSON.parse(row.recipe_ids); } catch (_e) { if (__DEV__) console.warn(\'[localDb] Caught error:\', _e.message); }
+  try { ids = JSON.parse(row.recipe_ids); } catch (_e) { if (__DEV__) console.warn('[localDb] Caught error:', _e.message); }
   ids = ids.filter((id) => id !== recipeId);
   db.runSync('UPDATE collections SET recipe_ids = ? WHERE id = ?', [JSON.stringify(ids), collectionId]);
   return { id: collectionId, recipe_ids: ids };

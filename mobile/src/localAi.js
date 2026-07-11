@@ -8,15 +8,15 @@ import { getCustomAIConfig, getDeepSeekKey, getGoogleKey } from './config';
 function extractJson(text) {
   if (!text) return null;
   // Try to parse directly, or extract from markdown code blocks
-  try { return JSON.parse(text); } catch (_e) { if (__DEV__) console.warn(\'[localAi] Caught error:\', _e.message); }
+  try { return JSON.parse(text); } catch (_e) { if (__DEV__) console.warn('[localAi] Caught error:', _e.message); }
   const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (match) {
-    try { return JSON.parse(match[1].trim()); } catch (_e) { if (__DEV__) console.warn(\'[localAi] Caught error:\', _e.message); }
+    try { return JSON.parse(match[1].trim()); } catch (_e) { if (__DEV__) console.warn('[localAi] Caught error:', _e.message); }
   }
   // Try to find the first { or [ and parse from there
   const start = text.search(/[\[{]/);
   if (start >= 0) {
-    try { return JSON.parse(text.slice(start)); } catch (_e) { if (__DEV__) console.warn(\'[localAi] Caught error:\', _e.message); }
+    try { return JSON.parse(text.slice(start)); } catch (_e) { if (__DEV__) console.warn('[localAi] Caught error:', _e.message); }
   }
   // Last resort: return null instead of raw string
   return null;

@@ -266,7 +266,7 @@ export const api = {
           .catch(() => setOnline(false));
         return cached;
       }
-    } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+    } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
 
     // No cache — must fetch from server
     try {
@@ -303,7 +303,7 @@ export const api = {
       // Try AsyncStorage cache, then localDb
       const cached = await getCachedRecipe(id);
       if (cached) return cached;
-      try { return await localDb.getRecipe(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+      try { return await localDb.getRecipe(id); } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
       throw e;
     }
   },
@@ -351,7 +351,7 @@ export const api = {
     // Offline: apply to cache + localDb, queue change
     const updated = { ...recipe, id };
     await cacheRecipe(updated);
-    try { await localDb.updateRecipe(id, recipe); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+    try { await localDb.updateRecipe(id, recipe); } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
     await addPendingChange({ type: 'update', id, data: recipe });
     return updated;
   },
@@ -370,10 +370,10 @@ export const api = {
           const map = JSON.parse(raw);
           delete map[id];
           await AsyncStorage.setItem('cegin_recipe_cache', JSON.stringify(map));
-        } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+        } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
       }
       // Remove from localDb
-      try { await localDb.deleteRecipe(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+      try { await localDb.deleteRecipe(id); } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
       return;
     } catch {
       setOnline(false);
@@ -385,9 +385,9 @@ export const api = {
         const map = JSON.parse(raw);
         delete map[id];
         await AsyncStorage.setItem('cegin_recipe_cache', JSON.stringify(map));
-      } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+      } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
     }
-    try { await localDb.deleteRecipe(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+    try { await localDb.deleteRecipe(id); } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
     await addPendingChange({ type: 'delete', id });
   },
 
@@ -484,7 +484,7 @@ export const api = {
       return data;
     } catch {
       // Offline fallback: try localDb
-      try { return await localDb.listCollections(); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+      try { return await localDb.listCollections(); } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
       return [];
     }
   },
@@ -495,7 +495,7 @@ export const api = {
       const data = await request('/recipe-collections');
       return data;
     } catch {
-      try { return await localDb.listRecipeCollections(); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+      try { return await localDb.listRecipeCollections(); } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
       return [];
     }
   },
@@ -505,7 +505,7 @@ export const api = {
     try {
       const data = await request('/collections', { method: 'POST', body: JSON.stringify({ name }) });
       // Mirror to localDb
-      try { await localDb.createCollection(name); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+      try { await localDb.createCollection(name); } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
       return data;
     } catch {
       setOnline(false);
@@ -520,10 +520,10 @@ export const api = {
     if (mode === 'local') return localDb.deleteCollection(id);
     try {
       await request(`/collections/${id}`, { method: 'DELETE' });
-      try { await localDb.deleteCollection(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+      try { await localDb.deleteCollection(id); } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
     } catch {
       setOnline(false);
-      try { await localDb.deleteCollection(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
+      try { await localDb.deleteCollection(id); } catch (_e) { if (__DEV__) console.warn('[api] Caught error:', _e.message); }
       await addPendingChange({ type: 'delete_collection', id });
     }
   },

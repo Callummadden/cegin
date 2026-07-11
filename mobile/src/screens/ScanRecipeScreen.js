@@ -67,7 +67,7 @@ export default function ScanRecipeScreen({ navigation }) {
       setParsed(true);
     } catch (e) {
       setModal({
-        title: 'Terry couldn\'t read it',
+        title: "Terry couldn't read it",
         message: e.message || 'Make sure your vision AI is configured in Settings.',
         buttons: [{ text: 'OK', primary: true }],
       });

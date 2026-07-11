@@ -510,14 +510,14 @@ async function searchFood(query) {
   try {
     const exact = await d.getFirstAsync(
       "SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.description) = ? LIMIT 1", [searchTerm]);
-    if (exact) { if (__DEV__) console.log('[USDA] Exact:', q, '->', exact.description); log
+    if (exact) { if (__DEV__) console.log('[USDA] Exact:', q, '->', exact.description); return exact; }
   } catch (e) { if (__DEV__) console.log('[USDA] Exact error:', e.message); }
 
   // Strategy 2: Description STARTS with query ("oats" matches "Oats, rolled")
   try {
     const starts = await d.getFirstAsync(
       "SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.description) LIKE ? ORDER BY LENGTH(f.description) ASC LIMIT 1", [q + '%']);
-    if (starts) { if (__DEV__) console.log('[USDA] Starts:', q, '->', starts.description); log
+    if (starts) { if (__DEV__) console.log('[USDA] Starts:', q, '->', starts.description); return starts; }
   } catch (e) { if (__DEV__) console.log('[USDA] Starts error:', e.message); }
 
   // Strategy 3: Alias match (UK/AU/CA terms stored in aliases column)
@@ -529,7 +529,7 @@ async function searchFood(query) {
         'SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.aliases) LIKE ? ORDER BY LENGTH(f.description) ASC LIMIT 1',
         ['%' + term + '%']
       );
-      if (aliasExact) { if (__DEV__) console.log('[USDA] Alias:', q, '(via', term, ')->', aliasExact.description); log
+      if (aliasExact) { if (__DEV__) console.log('[USDA] Alias:', q, '(via', term, ')->', aliasExact.description); return aliasExact; }
     } catch (e) { if (__DEV__) console.warn('[USDA] Alias search error:', e.message); }
   }
 
@@ -560,7 +560,7 @@ async function searchFood(query) {
         "SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.description) LIKE ? ORDER BY LENGTH(f.description) ASC LIMIT 1",
         ['%' + singular + '%']
       );
-      if (singularResult) { if (__DEV__) console.log('[USDA] Singular:', q, '(', singular, ')->', singularResult.description); log
+      if (singularResult) { if (__DEV__) console.log('[USDA] Singular:', q, '(', singular, ')->', singularResult.description); return singularResult; }
     } catch (e) { if (__DEV__) console.warn('[USDA] Singular search error:', e.message); }
   }
 
@@ -571,7 +571,7 @@ async function searchFood(query) {
     try {
       const last = await d.getFirstAsync(
         "SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.description) LIKE ? ORDER BY LENGTH(f.description) ASC LIMIT 1", [lastWord + '%']);
-      if (last) { if (__DEV__) console.log('[USDA] Last:', lastWord, '->', last.description); log
+      if (last) { if (__DEV__) console.log('[USDA] Last:', lastWord, '->', last.description); return last; }
     } catch (e) { if (__DEV__) console.log('[USDA] Last error:', e.message); }
   }
 

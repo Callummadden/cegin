@@ -92,7 +92,7 @@ export async function clearHistory() {
   if (await isServerMode()) {
     try {
       await api.clearChatHistory();
-    } catch (_e) { if (__DEV__) console.warn(\'[chatHistory] Caught error:\', _e.message); }
+    } catch (_e) { if (__DEV__) console.warn('[chatHistory] Caught error:', _e.message); }
   }
   await save([]);
 }

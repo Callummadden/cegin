@@ -97,8 +97,8 @@ export default function CookModeScreen({ route, navigation }) {
       Vibration.cancel();
       const player = vibratingRef.current[timerId];
       if (player) {
-        try { player.stop(); } catch (_e) { if (__DEV__) console.warn(\'[CookModeScreen] Caught error:\', _e.message); }
-        try { player.release(); } catch (_e) { if (__DEV__) console.warn(\'[CookModeScreen] Caught error:\', _e.message); }
+        try { player.stop(); } catch (_e) { if (__DEV__) console.warn('[CookModeScreen] Caught error:', _e.message); }
+        try { player.release(); } catch (_e) { if (__DEV__) console.warn('[CookModeScreen] Caught error:', _e.message); }
         delete vibratingRef.current[timerId];
       }
     });
@@ -168,8 +168,8 @@ export default function CookModeScreen({ route, navigation }) {
   useEffect(() => {
     return () => {
       for (const player of Object.values(vibratingRef.current)) {
-        try { player?.stop?.(); } catch (_e) { if (__DEV__) console.warn(\'[CookModeScreen] Caught error:\', _e.message); }
-        try { player?.release?.(); } catch (_e) { if (__DEV__) console.warn(\'[CookModeScreen] Caught error:\', _e.message); }
+        try { player?.stop?.(); } catch (_e) { if (__DEV__) console.warn('[CookModeScreen] Caught error:', _e.message); }
+        try { player?.release?.(); } catch (_e) { if (__DEV__) console.warn('[CookModeScreen] Caught error:', _e.message); }
       }
       Vibration.cancel();
     };

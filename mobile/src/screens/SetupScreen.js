@@ -688,7 +688,7 @@ export default function SetupScreen({ route, navigation }) {
         try {
           const token = await getPushToken();
           if (token) await api.registerPushToken(token);
-        } catch (_e) { if (__DEV__) console.warn(\'[SetupScreen] Caught error:\', _e.message); }
+        } catch (_e) { if (__DEV__) console.warn('[SetupScreen] Caught error:', _e.message); }
       }
     };
     const requestCamera = async () => {
