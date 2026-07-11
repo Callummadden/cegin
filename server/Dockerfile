@@ -21,6 +21,7 @@ COPY --chown=node:node . .
 
 # Database lives on a Docker volume so it survives container restarts/rebuilds.
 ENV DB_PATH=/data/recipes.db
+ENV NODE_ENV=production
 # Use UK timezone so date functions match client-side dates
 ENV TZ=Europe/London
 

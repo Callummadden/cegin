@@ -37,7 +37,7 @@ async function request(path, options = {}) {
   const timer = setTimeout(() => controller.abort(), timeout);
   const url = `${base}/api${path}`;
   try {
-    console.log(`[API] ${options.method || 'GET'} ${url}`);
+    if (__DEV__) console.log(`[API] ${options.method || 'GET'} ${url}`);
     const res = await fetch(url, {
       ...options,
       headers: { ...headers, ...options.headers },
@@ -46,12 +46,12 @@ async function request(path, options = {}) {
     clearTimeout(timer);
     if (!res.ok) {
       const errorText = await res.text().catch(() => '');
-      console.error(`[API] ${res.status} ${url}: ${errorText}`);
+      if (__DEV__) console.error(`[API] ${res.status} ${url}: ${errorText}`);
       let message = `Request failed (${res.status})`;
       try {
         const body = JSON.parse(errorText);
         if (body.error) message = body.error;
-      } catch {}
+      } catch (e) { if (__DEV__) console.warn('[API] Error response JSON parse:', e.message); }
       throw new Error(message);
     }
     if (res.status === 204) return null;
@@ -59,10 +59,10 @@ async function request(path, options = {}) {
   } catch (e) {
     clearTimeout(timer);
     if (e.name === 'AbortError') {
-      console.error(`[API] Timeout ${url}`);
+      if (__DEV__) console.error(`[API] Timeout ${url}`);
       throw new Error('Server unreachable — working offline');
     }
-    console.error(`[API] Error ${url}:`, e.message);
+    if (__DEV__) console.error(`[API] Error ${url}:`, e.message);
     throw e;
   }
 }
@@ -133,9 +133,9 @@ async function remapTempId(tempId, serverId) {
       const favs = JSON.parse(favRaw);
       if (favs[tempId]) { favs[serverId] = favs[tempId]; delete favs[tempId]; await AsyncStorage.setItem('cegin_favorites', JSON.stringify(favs)); }
     }
-    console.log(`[Sync] Remapped temp ID ${tempId} → ${serverId}`);
+    if (__DEV__) console.log(`[Sync] Remapped temp ID ${tempId} → ${serverId}`);
   } catch (e) {
-    console.warn('[Sync] Failed to remap temp ID:', e.message);
+    if (__DEV__) console.warn('[Sync] Failed to remap temp ID:', e.message);
   }
 }
 
@@ -170,7 +170,7 @@ export async function syncPendingChanges() {
           await request(`/collections/${change.id}`, { method: 'DELETE' });
           break;
       }
-    } catch {
+    } catch (e) { if (__DEV__) console.warn('[Sync] Change failed:', change.type, e.message);
       failed.push(change);
     }
   }
@@ -193,7 +193,7 @@ async function mirrorRecipesToLocalDb(recipes) {
     for (const recipe of recipes) {
       await mirrorSingleRecipeToLocalDb(recipe);
     }
-  } catch {}
+  } catch (e) { if (__DEV__) console.warn('[API] Mirror recipes to localDb error:', e.message); }
 }
 
 async function mirrorSingleRecipeToLocalDb(recipe) {
@@ -222,7 +222,7 @@ async function mirrorSingleRecipeToLocalDb(recipe) {
         r.updated_at || now,
       ],
     );
-  } catch {}
+  } catch (e) { if (__DEV__) console.warn('[API] Mirror single recipe error:', e.message); }
 }
 
 // ── Wrapped API ──────────────────────────────────────────────────────────────
@@ -266,7 +266,7 @@ export const api = {
           .catch(() => setOnline(false));
         return cached;
       }
-    } catch {}
+    } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
 
     // No cache — must fetch from server
     try {
@@ -303,7 +303,7 @@ export const api = {
       // Try AsyncStorage cache, then localDb
       const cached = await getCachedRecipe(id);
       if (cached) return cached;
-      try { return await localDb.getRecipe(id); } catch {}
+      try { return await localDb.getRecipe(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
       throw e;
     }
   },
@@ -351,7 +351,7 @@ export const api = {
     // Offline: apply to cache + localDb, queue change
     const updated = { ...recipe, id };
     await cacheRecipe(updated);
-    try { await localDb.updateRecipe(id, recipe); } catch {}
+    try { await localDb.updateRecipe(id, recipe); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
     await addPendingChange({ type: 'update', id, data: recipe });
     return updated;
   },
@@ -370,10 +370,10 @@ export const api = {
           const map = JSON.parse(raw);
           delete map[id];
           await AsyncStorage.setItem('cegin_recipe_cache', JSON.stringify(map));
-        } catch {}
+        } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
       }
       // Remove from localDb
-      try { await localDb.deleteRecipe(id); } catch {}
+      try { await localDb.deleteRecipe(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
       return;
     } catch {
       setOnline(false);
@@ -385,9 +385,9 @@ export const api = {
         const map = JSON.parse(raw);
         delete map[id];
         await AsyncStorage.setItem('cegin_recipe_cache', JSON.stringify(map));
-      } catch {}
+      } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
     }
-    try { await localDb.deleteRecipe(id); } catch {}
+    try { await localDb.deleteRecipe(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
     await addPendingChange({ type: 'delete', id });
   },
 
@@ -484,7 +484,7 @@ export const api = {
       return data;
     } catch {
       // Offline fallback: try localDb
-      try { return await localDb.listCollections(); } catch {}
+      try { return await localDb.listCollections(); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
       return [];
     }
   },
@@ -495,7 +495,7 @@ export const api = {
       const data = await request('/recipe-collections');
       return data;
     } catch {
-      try { return await localDb.listRecipeCollections(); } catch {}
+      try { return await localDb.listRecipeCollections(); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
       return [];
     }
   },
@@ -505,7 +505,7 @@ export const api = {
     try {
       const data = await request('/collections', { method: 'POST', body: JSON.stringify({ name }) });
       // Mirror to localDb
-      try { await localDb.createCollection(name); } catch {}
+      try { await localDb.createCollection(name); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
       return data;
     } catch {
       setOnline(false);
@@ -520,10 +520,10 @@ export const api = {
     if (mode === 'local') return localDb.deleteCollection(id);
     try {
       await request(`/collections/${id}`, { method: 'DELETE' });
-      try { await localDb.deleteCollection(id); } catch {}
+      try { await localDb.deleteCollection(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
     } catch {
       setOnline(false);
-      try { await localDb.deleteCollection(id); } catch {}
+      try { await localDb.deleteCollection(id); } catch (_e) { if (__DEV__) console.warn(\'[api] Caught error:\', _e.message); }
       await addPendingChange({ type: 'delete_collection', id });
     }
   },

@@ -51,7 +51,7 @@ export async function cacheRecipes(recipes) {
     for (const r of recipes) map[r.id] = r;
     await AsyncStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify(map));
     _recipesCache = recipes;
-  } catch {}
+  } catch (_e) { if (__DEV__) console.warn(\'[offlineCache] Caught error:\', _e.message); }
 }
 
 export async function getCachedRecipes() {
@@ -78,7 +78,7 @@ export async function cacheRecipe(recipe) {
     const map = raw ? JSON.parse(raw) : {};
     map[recipe.id] = recipe;
     await AsyncStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify(map));
-  } catch {}
+  } catch (_e) { if (__DEV__) console.warn(\'[offlineCache] Caught error:\', _e.message); }
 }
 
 export async function getCachedRecipe(id) {
@@ -100,7 +100,7 @@ export async function addPendingChange(change) {
     const list = raw ? JSON.parse(raw) : [];
     list.push({ ...change, timestamp: Date.now() });
     await AsyncStorage.setItem(PENDING_CHANGES_KEY, JSON.stringify(list));
-  } catch {}
+  } catch (_e) { if (__DEV__) console.warn(\'[offlineCache] Caught error:\', _e.message); }
 }
 
 export async function getPendingChanges() {
@@ -115,5 +115,5 @@ export async function getPendingChanges() {
 export async function clearPendingChanges() {
   try {
     await AsyncStorage.removeItem(PENDING_CHANGES_KEY);
-  } catch {}
+  } catch (_e) { if (__DEV__) console.warn(\'[offlineCache] Caught error:\', _e.message); }
 }

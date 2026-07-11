@@ -23,7 +23,7 @@ async function imageToBase64(uri) {
     // Check file exists first
     const info = await FileSystem.getInfoAsync(uri);
     if (!info.exists) {
-      console.log('[Cookbook] Image file does not exist:', uri);
+      if (__DEV__) console.log('[Cookbook] Image file does not exist:', uri);
       return null;
     }
     // Resize to max 1000px wide and compress to keep payload small
@@ -35,10 +35,10 @@ async function imageToBase64(uri) {
     const base64 = await FileSystem.readAsStringAsync(manipulated.uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    console.log('[Cookbook] Compressed image base64 length:', base64.length);
+    if (__DEV__) console.log('[Cookbook] Compressed image base64 length:', base64.length);
     return base64;
   } catch (e) {
-    console.error('[Cookbook] Failed to convert image to base64:', e.message);
+    if (__DEV__) console.error('[Cookbook] Failed to convert image to base64:', e.message);
     return null;
   }
 }
@@ -98,12 +98,12 @@ export async function addCookbookEntry(entry) {
       // Convert image to base64 for upload
       let imageBase64 = null;
       if (newEntry.imageUri) {
-        console.log('[Cookbook] Converting image to base64:', newEntry.imageUri);
+        if (__DEV__) console.log('[Cookbook] Converting image to base64:', newEntry.imageUri);
         imageBase64 = await imageToBase64(newEntry.imageUri);
-        console.log('[Cookbook] Base64 result:', imageBase64 ? `${imageBase64.length} chars` : 'null');
+        if (__DEV__) console.log('[Cookbook] Base64 result:', imageBase64 ? `${imageBase64.length} chars` : 'null');
       }
 
-      console.log('[Cookbook] Sending to server...');
+      if (__DEV__) console.log('[Cookbook] Sending to server...');
       const server = await api.addCookbookEntry({
         id: newEntry.id,
         recipeId: newEntry.recipeId,
@@ -112,7 +112,7 @@ export async function addCookbookEntry(entry) {
         date: newEntry.date,
         notes: newEntry.notes,
       });
-      console.log('[Cookbook] Server response:', server);
+      if (__DEV__) console.log('[Cookbook] Server response:', server);
       if (server) {
         // Don't add to local cache here — the WebSocket broadcast will trigger
         // getCookbook() which fetches from server and replaces the cache.
@@ -166,7 +166,7 @@ export async function deleteCookbookEntry(id) {
       await api.deleteCookbookEntry(id);
       // WebSocket broadcast will trigger getCookbook() to refresh the cache
       return;
-    } catch {}
+    } catch (_e) { if (__DEV__) console.warn(\'[cookbook] Caught error:\', _e.message); }
   }
 
   const list = await getCookbook();
@@ -179,7 +179,7 @@ export async function clearCookbook() {
   if (await isServerMode()) {
     try {
       await api.clearCookbook();
-    } catch {}
+    } catch (_e) { if (__DEV__) console.warn(\'[cookbook] Caught error:\', _e.message); }
   }
 
   await save([]);

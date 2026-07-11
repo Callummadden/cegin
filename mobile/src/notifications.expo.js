@@ -8,7 +8,7 @@
 
 
 export async function requestPermissions() {
-  console.log('[notifications] Skipping in Expo Go');
+  if (__DEV__) console.log('[notifications] Skipping in Expo Go');
 }
 
 export async function getPermissionStatus() {
@@ -24,7 +24,7 @@ export async function getPushToken() {
 }
 
 export async function registerForPushNotifications(_registerFn) {
-  console.log('[notifications] Push not available in Expo Go — use a dev build');
+  if (__DEV__) console.log('[notifications] Push not available in Expo Go — use a dev build');
   return null;
 }
 

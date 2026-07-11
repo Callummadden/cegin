@@ -5,6 +5,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const helmet = require('helmet');
 const {
   listRecipes,
   getRecipe,
@@ -25,21 +26,26 @@ const {
   deleteRecipeImage,
 } = require('./db');
 const ai = require('./ai');
-const { signToken, authMiddleware, hashPassword, comparePassword } = require('./auth');
+const { signToken, authMiddleware, hashPassword, comparePassword, ALLOW_ANONYMOUS } = require('./auth');
 const dbModule = require('./db');
 const { startCron } = require('./cron');
 const { sendPush } = require('./notifications');
 const crypto = require('crypto');
-const net = require('net');
 const dns = require('dns').promises;
+const { isPrivateIP } = require('./utils');
+const config = require('./config');
 const { WebSocketServer } = require('ws');
+const logger = require('./logger');
 
 const isProduction = process.env.NODE_ENV === 'production';
-function debugLog(...args) {
-  if (!isProduction) console.log(...args);
-}
 
 const app = express();
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // mobile apps don't need CSP
+  crossOriginEmbedderPolicy: false,
+}));
 
 // --- CORS (S2-1: only reflect allowed origins) ---
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:8081,http://localhost:19006')
@@ -59,9 +65,39 @@ app.use((req, res, next) => {
 });
 
 // --- Rate limiter for AI routes (S2-2: short-circuit, S2-3: before body parser) ---
+// --- Request ID middleware (generates UUID per request) ---
+app.use((req, res, next) => {
+  req.requestId = req.headers['x-request-id'] || crypto.randomUUID();
+  res.setHeader('X-Request-Id', req.requestId);
+  req.log = logger.createLogger(req.requestId);
+  next();
+});
+
+// --- Request logging middleware (method, path, status, duration) ---
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  res.on('finish', () => {
+    const durationNs = Number(process.hrtime.bigint() - start);
+    const durationMs = (durationNs / 1e6).toFixed(1);
+    const level = res.statusCode >= 500 ? 'error'
+      : res.statusCode >= 400 ? 'warn'
+      : 'info';
+    const meta = {
+      method: req.method,
+      path: req.originalUrl ? req.originalUrl.split('?')[0] : req.path,
+      status: res.statusCode,
+      durationMs: parseFloat(durationMs),
+      ip: req.ip,
+    };
+    if (level === 'error') logger.error(`${req.method} ${req.path} ${res.statusCode} ${durationMs}ms`, meta, req.requestId);
+    else if (level === 'warn') logger.warn(`${req.method} ${req.path} ${res.statusCode} ${durationMs}ms`, meta, req.requestId);
+    else logger.info(`${req.method} ${req.path} ${res.statusCode} ${durationMs}ms`, meta, req.requestId);
+  });
+  next();
+});
+
 const rateLimitMap = new Map();
-const RATE_LIMIT = 60; // requests per minute
-const RATE_WINDOW = 60 * 1000; // 1 minute in ms
+const { RATE_LIMIT, RATE_WINDOW, RATE_LIMIT_CLEANUP_INTERVAL } = config;
 
 function rateLimiter(req, res, next) {
   const ip = req.ip;
@@ -85,7 +121,7 @@ const cleanupTimer = setInterval(() => {
   for (const [ip, entry] of rateLimitMap) {
     if (now > entry.resetTime) rateLimitMap.delete(ip);
   }
-}, 5 * 60 * 1000);
+}, RATE_LIMIT_CLEANUP_INTERVAL);
 cleanupTimer.unref();
 
 // S2-3: Rate limiter early on /api/ai routes (before body parser)
@@ -95,6 +131,37 @@ app.use('/api/ai', rateLimiter);
 function parseId(param) {
   const id = parseInt(param, 10);
   return isNaN(id) ? null : id;
+}
+
+// Field length limits — prevents storage abuse and oversized payloads
+const FIELD_LIMITS = {
+  title: 200,
+  description: 2000,
+  notes: 2000,
+  collection: 100,
+  ingredients: 100,   // max array items
+  steps: 100,
+  tags: 20,
+};
+
+function validateRecipeFields(body) {
+  const errors = [];
+  for (const [field, limit] of Object.entries(FIELD_LIMITS)) {
+    const value = body[field];
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      if (value.length > limit) errors.push(`${field}: max ${limit} items`);
+    } else if (typeof value === 'string') {
+      if (value.length > limit) errors.push(`${field}: max ${limit} characters`);
+    }
+  }
+  return errors;
+}
+
+// Basic email format validation
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function isValidEmail(email) {
+  return typeof email === 'string' && email.length <= 254 && EMAIL_RE.test(email);
 }
 
 function cookbookEntryToResponse(e) {
@@ -108,17 +175,17 @@ function cookbookEntryToResponse(e) {
   };
 }
 
-function saveBase64Image(base64, dir) {
+async function saveBase64Image(base64, dir) {
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   const filepath = path.join(dir, filename);
-  fs.writeFileSync(filepath, Buffer.from(base64, 'base64'));
+  await fs.promises.writeFile(filepath, Buffer.from(base64, 'base64'));
   return filename;
 }
 
 // --- Body parsing (S2-11: path-aware to avoid stacking) ---
-const bodyParser1mb = express.json({ limit: '1mb' });
-const bodyParser5mb = express.json({ limit: '5mb' });
-const bodyParser20mb = express.json({ limit: '20mb' });
+const bodyParser1mb = express.json({ limit: config.BODY_LIMIT_SMALL });
+const bodyParser5mb = express.json({ limit: config.BODY_LIMIT_MEDIUM });
+const bodyParser20mb = express.json({ limit: config.BODY_LIMIT_LARGE });
 
 // Helper to get the route path consistently (handles middleware mounting)
 function getRoutePath(req) {
@@ -145,6 +212,7 @@ app.use('/api', (req, res, next) => {
   if (
     route.startsWith('/api/auth/') ||
     route === '/api/health' ||
+    route === '/api/health/detailed' ||
     route === '/api/ai/status' ||
     route === '/health' ||           // inside /api mount
     route === '/ai/status'           // inside /api mount
@@ -154,12 +222,19 @@ app.use('/api', (req, res, next) => {
   return authMiddleware(dbModule)(req, res, next);
 });
 
+// --- Static file serving (after auth middleware — requires authentication) ---
+const UPLOADS_DIR = path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : '/data', 'uploads', 'cookbook');
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+app.use('/api/uploads/cookbook', express.static(UPLOADS_DIR));
+
+const TERRY_VISION_DIR = path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : '/data', 'uploads', 'terry-vision');
+fs.mkdirSync(TERRY_VISION_DIR, { recursive: true });
+app.use('/api/uploads/terry-vision', express.static(TERRY_VISION_DIR));
+
 // Health check — the app uses this to test the connection in Settings
 // Also returns version info so the client can check if it's outdated
 const SERVER_VERSION = require('./package.json').version;
-const MIN_CLIENT_VERSION = '1.1.5';    // oldest client that works with this server
-const LATEST_CLIENT_VERSION = '1.3.2'; // newest published client
-const LATEST_SERVER_VERSION = '1.3.2'; // keep in sync with server/package.json + mobile/app.json on releases
+const { MIN_CLIENT_VERSION, LATEST_CLIENT_VERSION, LATEST_SERVER_VERSION } = config;
 app.get('/api/health', (req, res) => res.json({
   ok: true,
   serverVersion: SERVER_VERSION,
@@ -168,12 +243,97 @@ app.get('/api/health', (req, res) => res.json({
   latestClientVersion: LATEST_CLIENT_VERSION,
 }));
 
+// Detailed health check — reports dependency status, memory, uptime, WS connections
+app.get('/api/health/detailed', (req, res) => {
+  // DB connection status
+  let dbStatus = 'ok';
+  try {
+    dbModule.db.prepare('SELECT 1').get();
+  } catch (e) {
+    dbStatus = 'error';
+  }
+
+  const mem = process.memoryUsage();
+  const uptime = process.uptime();
+
+  res.json({
+    ok: dbStatus === 'ok',
+    uptime: Math.round(uptime),
+    uptimeFormatted: formatUptime(uptime),
+    serverVersion: SERVER_VERSION,
+    database: {
+      status: dbStatus,
+      path: process.env.DB_PATH || 'recipes.db',
+    },
+    websocket: {
+      activeConnections: wss.clients.size,
+    },
+    memory: {
+      rss: formatBytes(mem.rss),
+      heapUsed: formatBytes(mem.heapUsed),
+      heapTotal: formatBytes(mem.heapTotal),
+      external: formatBytes(mem.external),
+      rssBytes: mem.rss,
+      heapUsedBytes: mem.heapUsed,
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
+}
+
+// --- Auth rate limiter (stricter than AI routes) ---
+const authRateLimitMap = new Map();
+const { AUTH_RATE_LIMIT, AUTH_RATE_WINDOW } = config;
+
+function authRateLimiter(req, res, next) {
+  const ip = req.ip;
+  const now = Date.now();
+  let entry = authRateLimitMap.get(ip);
+  if (!entry || now > entry.resetTime) {
+    entry = { count: 0, resetTime: now + AUTH_RATE_WINDOW };
+    authRateLimitMap.set(ip, entry);
+  }
+  if (entry.count >= AUTH_RATE_LIMIT) {
+    return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+  }
+  entry.count++;
+  next();
+}
+
+// Clean up stale auth rate limit entries every 5 minutes
+const authCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of authRateLimitMap) {
+    if (now > entry.resetTime) authRateLimitMap.delete(ip);
+  }
+}, config.RATE_LIMIT_CLEANUP_INTERVAL);
+authCleanupTimer.unref();
+
 // --- Auth ---
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authRateLimiter, async (req, res) => {
   const { email, password, displayName } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (typeof email !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Email and password must be strings' });
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Invalid email format' });
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
   const existing = dbModule.getUserByEmail(email.toLowerCase().trim());
   if (existing) return res.status(409).json({ error: 'Email already registered' });
@@ -183,7 +343,7 @@ app.post('/api/auth/register', async (req, res) => {
   res.json({ token, user: { id: user.id, email: user.email, displayName: user.display_name } });
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authRateLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (typeof email !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Email and password must be strings' });
@@ -487,15 +647,20 @@ app.get('/api/recipes/:id', (req, res) => {
   res.json(recipe);
 });
 
-app.post('/api/recipes', (req, res) => {
+app.post('/api/recipes', async (req, res) => {
   if (!req.body.title || !req.body.title.trim()) {
     return res.status(400).json({ error: 'title is required' });
+  }
+  // Validate field lengths (title max 200, description max 2000, ingredients max 100, etc.)
+  const fieldErrors = validateRecipeFields(req.body);
+  if (fieldErrors.length > 0) {
+    return res.status(400).json({ error: 'Validation failed', details: fieldErrors });
   }
   // S2-13: Handle base64 image uploads from camera/gallery
   if (req.body.image_url && req.body.image_url.startsWith('data:image')) {
     const base64 = req.body.image_url.split(',')[1];
     if (base64) {
-      const filename = saveBase64Image(base64, UPLOADS_DIR);
+      const filename = await saveBase64Image(base64, UPLOADS_DIR);
       req.body.image_url = `/api/uploads/cookbook/${filename}`;
     }
   }
@@ -504,14 +669,19 @@ app.post('/api/recipes', (req, res) => {
   broadcast('recipes', 'changed');
 });
 
-app.put('/api/recipes/:id', (req, res) => {
+app.put('/api/recipes/:id', async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid recipe ID' });
+  // Validate field lengths
+  const fieldErrors = validateRecipeFields(req.body);
+  if (fieldErrors.length > 0) {
+    return res.status(400).json({ error: 'Validation failed', details: fieldErrors });
+  }
   // S2-13: Handle base64 image uploads from camera/gallery
   if (req.body.image_url && req.body.image_url.startsWith('data:image')) {
     const base64 = req.body.image_url.split(',')[1];
     if (base64) {
-      const filename = saveBase64Image(base64, UPLOADS_DIR);
+      const filename = await saveBase64Image(base64, UPLOADS_DIR);
       req.body.image_url = `/api/uploads/cookbook/${filename}`;
     }
   }
@@ -703,7 +873,7 @@ app.post('/api/meal-plan/sync', (req, res) => {
     res.json(synced);
     broadcast('meal_plan', 'changed');
   } catch (e) {
-    console.error('[meal-plan/sync] Error:', e.message);
+    logger.error('[meal-plan/sync] Error', { error: e.message }, req.requestId);
     res.status(500).json({ error: e.message });
   }
 });
@@ -794,35 +964,10 @@ app.delete('/api/dietary-profiles', (req, res) => {
 
 // --- Cookbook Entries (kitchen log with photos) ---
 
-const UPLOADS_DIR = path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : '/data', 'uploads', 'cookbook');
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-
-// Serve uploaded images
-app.use('/api/uploads/cookbook', express.static(UPLOADS_DIR));
-
 // --- Image proxy with on-the-fly resizing ---
 const IMAGE_CACHE_DIR = path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, 'data'), 'uploads', 'image-cache');
 fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
 
-// SSRF protection helper — validate URL before proxying
-function isPrivateIP(ip) {
-  if (net.isIP(ip) === 4) {
-    const parts = ip.split('.').map(Number);
-    if (parts[0] === 127) return true;
-    if (parts[0] === 10) return true;
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-    if (parts[0] === 192 && parts[1] === 168) return true;
-    if (parts[0] === 169 && parts[1] === 254) return true;
-    return false;
-  }
-  if (net.isIP(ip) === 6) {
-    if (ip === '::1') return true;
-    if (/^(fc|fd)/i.test(ip)) return true;
-    if (/^fe80/i.test(ip)) return true;
-    return false;
-  }
-  return false;
-}
 
 app.get('/api/image-proxy', async (req, res) => {
   const { url, w } = req.query;
@@ -840,7 +985,7 @@ app.get('/api/image-proxy', async (req, res) => {
   } catch (e) {
     return res.status(400).json({ error: 'DNS lookup failed' });
   }
-  const width = Math.min(parseInt(w, 10) || 600, 1200);
+  const width = Math.min(parseInt(w, 10) || config.IMAGE_PROXY_DEFAULT_WIDTH, config.IMAGE_PROXY_MAX_WIDTH);
 
   // Cache key based on url + width
   const cacheKey = crypto.createHash('md5').update(`${url}_${width}`).digest('hex') + '.jpg';
@@ -853,7 +998,7 @@ app.get('/api/image-proxy', async (req, res) => {
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const timer = setTimeout(() => controller.abort(), config.IMAGE_PROXY_FETCH_TIMEOUT);
     const resp = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
     if (!resp.ok) return res.status(502).json({ error: 'fetch failed' });
@@ -866,7 +1011,7 @@ app.get('/api/image-proxy', async (req, res) => {
 
     fs.writeFileSync(cachePath, resized);
     res.set('Content-Type', 'image/jpeg');
-    res.set('Cache-Control', 'public, max-age=2592000'); // 30 days
+    res.set('Cache-Control', `public, max-age=${config.IMAGE_CACHE_MAX_AGE}`);
     res.send(resized);
   } catch (e) {
     res.status(502).json({ error: e.message });
@@ -879,11 +1024,11 @@ app.get('/api/cookbook', (req, res) => {
   res.json(entries.map(cookbookEntryToResponse));
 });
 
-app.post('/api/cookbook', (req, res) => {
+app.post('/api/cookbook', async (req, res) => {
   const userId = req.user?.id || 0;
   const { recipeId, recipeTitle, imageBase64, date, notes } = req.body;
 
-  const imagePath = imageBase64 ? saveBase64Image(imageBase64, UPLOADS_DIR) : '';
+  const imagePath = imageBase64 ? await saveBase64Image(imageBase64, UPLOADS_DIR) : '';
 
   const entry = dbModule.addCookbookEntry(userId, {
     id: req.body.id,
@@ -898,12 +1043,12 @@ app.post('/api/cookbook', (req, res) => {
   broadcast('cookbook', 'changed');
 });
 
-app.put('/api/cookbook/:id', (req, res) => {
+app.put('/api/cookbook/:id', async (req, res) => {
   const userId = req.user?.id || 0;
   const { id } = req.params;
   const { recipeTitle, imageBase64, notes, date } = req.body;
 
-  const imagePath = imageBase64 ? saveBase64Image(imageBase64, UPLOADS_DIR) : undefined;
+  const imagePath = imageBase64 ? await saveBase64Image(imageBase64, UPLOADS_DIR) : undefined;
 
   const updated = dbModule.updateCookbookEntry(id, userId, {
     recipeTitle,
@@ -944,11 +1089,6 @@ app.delete('/api/cookbook', (req, res) => {
 
 // --- Terry Vision Scans ---
 
-const TERRY_VISION_DIR = path.join(process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : '/data', 'uploads', 'terry-vision');
-fs.mkdirSync(TERRY_VISION_DIR, { recursive: true });
-
-app.use('/api/uploads/terry-vision', express.static(TERRY_VISION_DIR));
-
 // Get all scans for the current user
 app.get('/api/terry-vision/scans', (req, res) => {
   const userId = req.user?.id || 0;
@@ -969,7 +1109,8 @@ app.post('/api/terry-vision/scans', (req, res) => {
   if (!section || !imageBase64) {
     return res.status(400).json({ error: 'section and imageBase64 required' });
   }
-  const scanId = id || `tv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const scanId = (id || `tv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
+    .replace(/[^a-zA-Z0-9_-]/g, '');
   const filename = `${scanId}.jpg`;
   fs.writeFileSync(path.join(TERRY_VISION_DIR, filename), Buffer.from(imageBase64, 'base64'));
 
@@ -1102,25 +1243,62 @@ app.delete('/api/activity-context', (req, res) => {
 
 // S2-10: Express error handler middleware (must be last)
 app.use((err, req, res, next) => {
-  console.error(err);
+  const requestId = req.requestId;
   const status = err.status || 500;
+  if (isProduction) {
+    // Sanitized: log message only, no stack trace
+    logger.error(`Unhandled error: ${err.message}`, {
+      status,
+      path: req.path,
+      method: req.method,
+    }, requestId);
+  } else {
+    // Full error with stack trace in development
+    logger.error(`Unhandled error: ${err.message}`, {
+      status,
+      path: req.path,
+      method: req.method,
+      stack: err.stack,
+    }, requestId);
+  }
   const message = status === 500 ? 'Internal server error' : (err.message || 'Internal server error');
   res.status(status).json({ error: message });
 });
 
-const PORT = process.env.PORT || 3000;
+const { PORT } = config;
 // 0.0.0.0 so the phone can reach it over the LAN
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Recipe server listening on http://0.0.0.0:${PORT}`);
+  logger.info(`Recipe server listening on http://0.0.0.0:${PORT}`, { port: PORT, env: isProduction ? 'production' : 'development' });
   // Start Chef Terry's notification engine
   startCron();
 });
 
 // ── WebSocket — real-time sync between devices ─────────────────────────────
+const url = require('url');
+const { verifyToken } = require('./auth');
+
 const wss = new WebSocketServer({ server, path: '/ws' });
 
-wss.on('connection', (ws) => {
-  debugLog(`[WS] Client connected (${wss.clients.size} total)`);
+wss.on('connection', (ws, req) => {
+  // Verify JWT from query param: /ws?token=<jwt>
+  const params = new url.URL(req.url, 'http://localhost').searchParams;
+  const token = params.get('token');
+  let userId = null;
+  if (token) {
+    try {
+      const decoded = verifyToken(token);
+      userId = decoded.id;
+      ws.userId = userId;
+    } catch {
+      ws.close(4001, 'Invalid token');
+      return;
+    }
+  } else if (!ALLOW_ANONYMOUS) {
+    ws.close(4001, 'Authentication required');
+    return;
+  }
+  // In open mode (no auth required), allow anonymous connections but tag them
+  logger.debug(`[WS] Client connected (user=${userId || 'anonymous'}, total=${wss.clients.size})`);
   ws.isAlive = true;
   ws.on('message', (data) => {
     try {
@@ -1130,22 +1308,23 @@ wss.on('connection', (ws) => {
       }
     } catch {}
   });
-  ws.on('close', () => debugLog(`[WS] Client disconnected (${wss.clients.size} total)`));
-  ws.on('error', (err) => console.error('[WS] Error:', err.message));
+  ws.on('close', () => logger.debug(`[WS] Client disconnected (${wss.clients.size} total)`));
+  ws.on('error', (err) => logger.error('[WS] Error', { error: err.message }));
   ws.on('pong', () => { ws.isAlive = true; });
 });
 
 // Dead connection cleanup — every 30s
-setInterval(() => {
+const wsPingInterval = setInterval(() => {
   for (const client of wss.clients) {
     if (client.isAlive === false) {
-      debugLog('[WS] Terminating stale client');
+      logger.debug('[WS] Terminating stale client');
       client.terminate();
     }
     client.isAlive = false;
     client.ping();
   }
-}, 30000);
+}, config.WS_PING_INTERVAL);
+wsPingInterval.unref();
 
 /** Broadcast a change event to all connected clients. */
 function broadcast(type, action) {
@@ -1156,3 +1335,34 @@ function broadcast(type, action) {
     }
   }
 }
+
+// ── Graceful shutdown ──────────────────────────────────────────────────────
+function shutdown(signal) {
+  logger.info(`Received ${signal}, shutting down gracefully…`);
+
+  // 1. Stop accepting new connections and close existing HTTP connections
+  wss.close(() => {
+    logger.debug('[Server] WebSocket server closed');
+  });
+
+  server.close(() => {
+    logger.info('HTTP server closed');
+    // 2. Close the database
+    try {
+      dbModule.db.close();
+      logger.info('Database closed');
+    } catch (e) {
+      logger.error('Error closing database', { error: e.message });
+    }
+    process.exit(0);
+  });
+
+  // Force exit after 5s if graceful close stalls
+  setTimeout(() => {
+    logger.error('Forced exit after timeout');
+    process.exit(1);
+  }, 5000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -38,6 +38,11 @@ services:
       - VISION_API_KEY
       - JWT_SECRET
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
     # Healthcheck uses the built-in /api/health endpoint.
     healthcheck:

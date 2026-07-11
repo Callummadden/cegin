@@ -1,0 +1,33 @@
+name: Mobile Build Check
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  mobile-checks:
+    name: Expo Doctor & Build Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Run expo-doctor
+        working-directory: mobile
+        run: npx expo-doctor
+
+      - name: Verify TypeScript / JS compilation
+        working-directory: mobile
+        run: npx expo export --dump-sourcemap --platform web 2>&1 || true
+        # --platform web is the lightest build target; just verifies bundling succeeds

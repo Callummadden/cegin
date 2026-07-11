@@ -30,53 +30,11 @@ import * as ImagePicker from 'expo-image-picker';
 import AiDisclaimer from '../components/AiDisclaimer';
 import { useAi } from '../aiContext';
 import { useResponsive } from '../utils/responsive';
-import { fmtClock } from '../utils/timerUtils';
+import { fmtClock, findAllTimers } from '../utils/timerUtils';
 
 
 const fireImg = require('../../assets/fire.jpeg');
 const thinkingImg = require('../../assets/thinking.jpeg');
-
-
-// ─── Timer parsing ───────────────────────────────────────────────
-
-/**
- * Find ALL time mentions in a string. Returns an array of
- * { match, minutes, index, length } objects sorted by position.
- * Handles: '25 minutes', '1 hour', '10 mins', '30-40 minutes' (first number),
- *          '1 hour 30 minutes', compound times, etc.
- */
-function findAllTimers(text) {
-  // Pattern: optional range, number, unit
-  const re = /(\d+(?:\.\d+)?)\s*(?:-\s*\d+(?:\.\d+)?)?\s*(hours?|hrs?|minutes?|mins?)\b/gi;
-  const results = [];
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const num = parseFloat(m[1]);
-    const unit = m[2].toLowerCase();
-    let minutes;
-    if (unit.startsWith('hour') || unit.startsWith('hr')) {
-      minutes = Math.round(num * 60);
-    } else {
-      minutes = Math.round(num);
-    }
-    if (minutes > 0) {
-      results.push({
-        match: m[0],
-        minutes,
-        index: m.index,
-        length: m[0].length,
-      });
-    }
-  }
-  return results;
-}
-
-/** Legacy single-match parser (kept for the big timer card fallback) */
-function parseTimerMins(text) {
-  const found = findAllTimers(text);
-  return found.length > 0 ? found[0].minutes : null;
-}
-
 
 
 // ─── Constants ───────────────────────────────────────────────────
@@ -139,8 +97,8 @@ export default function CookModeScreen({ route, navigation }) {
       Vibration.cancel();
       const player = vibratingRef.current[timerId];
       if (player) {
-        try { player.stop(); } catch {}
-        try { player.release(); } catch {}
+        try { player.stop(); } catch (_e) { if (__DEV__) console.warn(\'[CookModeScreen] Caught error:\', _e.message); }
+        try { player.release(); } catch (_e) { if (__DEV__) console.warn(\'[CookModeScreen] Caught error:\', _e.message); }
         delete vibratingRef.current[timerId];
       }
     });
@@ -210,8 +168,8 @@ export default function CookModeScreen({ route, navigation }) {
   useEffect(() => {
     return () => {
       for (const player of Object.values(vibratingRef.current)) {
-        try { player?.stop?.(); } catch {}
-        try { player?.release?.(); } catch {}
+        try { player?.stop?.(); } catch (_e) { if (__DEV__) console.warn(\'[CookModeScreen] Caught error:\', _e.message); }
+        try { player?.release?.(); } catch (_e) { if (__DEV__) console.warn(\'[CookModeScreen] Caught error:\', _e.message); }
       }
       Vibration.cancel();
     };
@@ -656,7 +614,10 @@ export default function CookModeScreen({ route, navigation }) {
 
               {/* Close */}
               {(panicResult || adjustResult) && <AiDisclaimer style={{ marginHorizontal: 16, marginTop: 4 }} />}
-              <Pressable style={styles.panelClose} onPress={closePanel}>
+              <Pressable style={styles.panelClose} onPress={closePanel}
+                accessibilityLabel="Close panel"
+                accessibilityRole="button"
+              >
                 <Text style={[styles.panelCloseText, { fontFamily: MONO, color: colors.textMuted }]}>CLOSE</Text>
               </Pressable>
             </ScrollView>

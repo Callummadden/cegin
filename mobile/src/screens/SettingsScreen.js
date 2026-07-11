@@ -3,7 +3,6 @@
 // This file is part of Cegin — https://github.com/Callummadden/cegin
 import { useEffect, useRef, useState, useMemo } from 'react';
 import {
-  Image,
   KeyboardAvoidingView,
   Linking,
   Pressable,
@@ -26,6 +25,7 @@ import { clearCache as clearDietProfilesCache } from '../dietProfiles';
 import { useResponsive } from '../utils/responsive';
 import { disconnect as wsDisconnect, connect as wsConnect } from '../wsSync';
 import { MONO, useTheme, THEME_LIST, OLED_ACCENTS } from '../theme';
+import { Image } from 'expo-image';
 import Constants from 'expo-constants';
 import { checkVersions, getVersionStatus, CLIENT_VERSION } from '../versionCheck';
 
@@ -241,7 +241,7 @@ export default function SettingsScreen({ navigation }) {
   useEffect(() => {
     getServerUrl().then(setUrl);
     AsyncStorage.getItem('saved_servers').then((v) => {
-      try { if (v) setSavedServers(JSON.parse(v)); } catch {}
+      try { if (v) setSavedServers(JSON.parse(v)); } catch (_e) { if (__DEV__) console.warn(\'[SettingsScreen] Caught error:\', _e.message); }
     });
     api.aiStatus().then(setAiStatus).catch(() => {});
     checkVersions().then(setVersionInfo).catch(() => {});
@@ -314,7 +314,7 @@ export default function SettingsScreen({ navigation }) {
     try {
       const res = await fetch(`${trimmed}/api/health`, { signal: AbortSignal.timeout(3000) });
       if (res.ok) label = trimmed;
-    } catch {}
+    } catch (_e) { if (__DEV__) console.warn(\'[SettingsScreen] Caught error:\', _e.message); }
     const updated = [...savedServers, { url: trimmed, label, addedAt: Date.now() }];
     setSavedServers(updated);
     await AsyncStorage.setItem('saved_servers', JSON.stringify(updated));
@@ -493,7 +493,7 @@ export default function SettingsScreen({ navigation }) {
         {terryCrib && (
           <View style={styles.section}>
             <View style={[styles.terryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Image source={terryImg} style={styles.terryPhoto} resizeMode="cover" />
+              <Image source={terryImg} style={styles.terryPhoto} contentFit="cover" />
               <View style={styles.terryInfo}>
                 <Text style={[styles.terryName, { color: colors.text }]}>CHEF TERRY</Text>
                 <Text style={[styles.terryTitle, { fontFamily: MONO, color: colors.primary }]}>HEAD OF KITCHEN OPERATIONS</Text>
@@ -712,7 +712,7 @@ export default function SettingsScreen({ navigation }) {
                       try {
                         const token = await getPushToken();
                         if (token) await api.registerPushToken(token);
-                      } catch {}
+                      } catch (_e) { if (__DEV__) console.warn(\'[SettingsScreen] Caught error:\', _e.message); }
                     }
                   }}
                 >

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
 // This file is part of Cegin — https://github.com/Callummadden/cegin
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -9,19 +9,41 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, ActivityIndicator, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
+
+// Core screens — eager imports (frequently accessed)
 import RecipeListScreen from './src/screens/RecipeListScreen';
 import RecipeDetailScreen from './src/screens/RecipeDetailScreen';
 import EditRecipeScreen from './src/screens/EditRecipeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import AssistantScreen from './src/screens/AssistantScreen';
 import CookModeScreen from './src/screens/CookModeScreen';
 import ShoppingListScreen from './src/screens/ShoppingListScreen';
-import MealPlannerScreen from './src/screens/MealPlannerScreen';
-import StatsScreen from './src/screens/StatsScreen';
-import CookbookScreen from './src/screens/CookbookScreen';
-import TerryVisionScreen from './src/screens/TerryVisionScreen';
 import SetupScreen from './src/screens/SetupScreen';
-import ScanRecipeScreen from './src/screens/ScanRecipeScreen';
+
+// Heavy / less-frequently-used screens — lazy-loaded to reduce initial bundle
+const AssistantScreen = React.lazy(() => import('./src/screens/AssistantScreen'));
+const MealPlannerScreen = React.lazy(() => import('./src/screens/MealPlannerScreen'));
+const StatsScreen = React.lazy(() => import('./src/screens/StatsScreen'));
+const CookbookScreen = React.lazy(() => import('./src/screens/CookbookScreen'));
+const TerryVisionScreen = React.lazy(() => import('./src/screens/TerryVisionScreen'));
+const ScanRecipeScreen = React.lazy(() => import('./src/screens/ScanRecipeScreen'));
+import ErrorBoundary from './src/components/ErrorBoundary';
+import { RecipeGroup, MealPlanningGroup, CookingGroup, SettingsGroup } from './src/components/ScreenGroups';
+
+// Wrapped screen components — each screen gets its own group-level ErrorBoundary
+const wrap = (Group, Screen) => (props) => <Group><Screen {...props} /></Group>;
+const WrappedRecipeList    = wrap(RecipeGroup, RecipeListScreen);
+const WrappedRecipeDetail  = wrap(RecipeGroup, RecipeDetailScreen);
+const WrappedEditRecipe    = wrap(RecipeGroup, EditRecipeScreen);
+const WrappedScanRecipe    = wrap(RecipeGroup, ScanRecipeScreen);
+const WrappedCookbook      = wrap(RecipeGroup, CookbookScreen);
+const WrappedMealPlanner   = wrap(MealPlanningGroup, MealPlannerScreen);
+const WrappedShoppingList  = wrap(MealPlanningGroup, ShoppingListScreen);
+const WrappedCookMode      = wrap(CookingGroup, CookModeScreen);
+const WrappedTerryVision   = wrap(CookingGroup, TerryVisionScreen);
+const WrappedSettings      = wrap(SettingsGroup, SettingsScreen);
+const WrappedAssistant     = wrap(SettingsGroup, AssistantScreen);
+const WrappedStats         = wrap(SettingsGroup, StatsScreen);
+const WrappedSetup         = wrap(SettingsGroup, SetupScreen);
 
 import { ThemeProvider, useTheme } from './src/theme';
 import { ToastProvider } from './src/components/Toast';
@@ -52,6 +74,12 @@ function AppNavigator({ initialRoute }) {
     <NavigationContainer theme={navTheme}>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <View style={{ flex: 1 }}>
+        <ErrorBoundary>
+        <Suspense fallback={
+          <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        }>
         <Stack.Navigator screenOptions={{
           headerShown: false,
           animation: 'fade',
@@ -60,21 +88,27 @@ function AppNavigator({ initialRoute }) {
         }}
           initialRouteName={initialRoute}
         >
-          <Stack.Screen name="RecipeList" component={RecipeListScreen} />
-          <Stack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
-          <Stack.Screen name="EditRecipe" component={EditRecipeScreen} />
-          <Stack.Screen name="ScanRecipe" component={ScanRecipeScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="Assistant" component={AssistantScreen} />
-          <Stack.Screen name="CookMode" component={CookModeScreen} options={{ unmountOnBlur: false }} />
-          <Stack.Screen name="ShoppingList" component={ShoppingListScreen} />
-          <Stack.Screen name="MealPlanner" component={MealPlannerScreen} />
-          <Stack.Screen name="Stats" component={StatsScreen} />
-          <Stack.Screen name="Cookbook" component={CookbookScreen} />
-          <Stack.Screen name="TerryVision" component={TerryVisionScreen} />
-          <Stack.Screen name="Setup" component={SetupScreen} />
+          {/* Recipes */}
+          <Stack.Screen name="RecipeList" component={WrappedRecipeList} />
+          <Stack.Screen name="RecipeDetail" component={WrappedRecipeDetail} />
+          <Stack.Screen name="EditRecipe" component={WrappedEditRecipe} />
+          <Stack.Screen name="ScanRecipe" component={WrappedScanRecipe} />
+          <Stack.Screen name="Cookbook" component={WrappedCookbook} />
+          {/* Meal Planning */}
+          <Stack.Screen name="MealPlanner" component={WrappedMealPlanner} />
+          <Stack.Screen name="ShoppingList" component={WrappedShoppingList} />
+          {/* Cooking */}
+          <Stack.Screen name="CookMode" component={WrappedCookMode} options={{ unmountOnBlur: false }} />
+          <Stack.Screen name="TerryVision" component={WrappedTerryVision} />
+          {/* Settings & Utilities */}
+          <Stack.Screen name="Settings" component={WrappedSettings} />
+          <Stack.Screen name="Assistant" component={WrappedAssistant} />
+          <Stack.Screen name="Stats" component={WrappedStats} />
+          <Stack.Screen name="Setup" component={WrappedSetup} />
 
         </Stack.Navigator>
+        </Suspense>
+        </ErrorBoundary>
         <GlobalTimerBar />
       </View>
     </NavigationContainer>

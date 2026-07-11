@@ -22,6 +22,7 @@ import AiDisclaimer from '../components/AiDisclaimer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAi } from '../aiContext';
 import { useResponsive } from '../utils/responsive';
+import { buildRecipeObject } from '../utils/recipeUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -117,20 +118,18 @@ export default function EditRecipeScreen({ route, navigation }) {
     }
   };
 
-  const splitLines = (text) => text.split('\n').map((l) => l.trim()).filter(Boolean);
-
-  const buildRecipe = () => ({
-    title: title.trim(),
-    description: description.trim(),
-    ingredients: splitLines(ingredients),
-    steps: splitLines(steps),
-    tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-    prep_minutes: parseInt(prepMinutes, 10) || 0,
-    cook_minutes: parseInt(cookMinutes, 10) || 0,
-    servings: parseInt(servings, 10) || 1,
-    image_url: imageUrl.trim(),
-    notes: notes.trim(),
-    collection: collection.trim(),
+  const buildRecipe = () => buildRecipeObject({
+    title,
+    description,
+    ingredients,
+    steps,
+    tags,
+    prepMinutes,
+    cookMinutes,
+    servings,
+    imageUrl,
+    notes,
+    collection,
   });
 
   const [wasTidied, setWasTidied] = useState(false);
@@ -169,7 +168,7 @@ export default function EditRecipeScreen({ route, navigation }) {
           recipe.image_url = `data:image/jpeg;base64,${base64}`;
         }
       } catch (e) {
-        console.warn('[EditRecipe] Failed to convert image to base64:', e.message);
+        if (__DEV__) console.warn('[EditRecipe] Failed to convert image to base64:', e.message);
       }
     }
     setSaving(true);
@@ -208,6 +207,8 @@ export default function EditRecipeScreen({ route, navigation }) {
           <Pressable
             style={[styles.backBtn, { borderColor: colors.border }]}
             onPress={() => navigation.goBack()}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 17, color: colors.text }}>←</Text>
           </Pressable>
@@ -216,6 +217,9 @@ export default function EditRecipeScreen({ route, navigation }) {
           </Text>
           <Pressable
             style={{ marginLeft: 'auto', padding: 4 }}
+            accessibilityLabel="Help"
+            accessibilityHint="Shows how to use the recipe editor"
+            accessibilityRole="button"
             onPress={() => setModal({
               title: 'How it works',
               message: 'TITLE — Give your recipe a name.\n\nPHOTO — Take a photo or pick from gallery.\n\nPREP/COOK TIME — How long it takes (in minutes).\n\nSERVINGS — How many people it feeds.\n\nINGREDIENTS — One per line (e.g. "2 cups flour").\n\nINSTRUCTIONS — One step per line.\n\nTIMERS — Write times in your instructions (e.g. "Bake for 30 minutes" or "Simmer for 1 hour"). When you cook the recipe, these become tappable countdown timers with alerts.\n\nTAGS — Comma-separated (e.g. "dinner, quick, veggie").\n\nNOTES — Personal tweaks or reminders.',
@@ -241,11 +245,15 @@ export default function EditRecipeScreen({ route, navigation }) {
               keyboardType="url"
               returnKeyType="go"
               onSubmitEditing={importFromUrl}
+              accessibilityLabel="Recipe URL"
+              accessibilityRole="text"
             />
             <Pressable
               style={[styles.importBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }, importing && styles.disabled]}
               onPress={importFromUrl}
               disabled={importing}
+              accessibilityLabel="Import from URL"
+              accessibilityRole="button"
             >
               {importing ? (
                 <ActivityIndicator size="small" color={colors.primary} />
@@ -272,6 +280,8 @@ export default function EditRecipeScreen({ route, navigation }) {
             value={title}
             onChangeText={setTitle}
             returnKeyType="next"
+            accessibilityLabel="Recipe title"
+            accessibilityRole="text"
           />
         </View>
 
@@ -283,6 +293,8 @@ export default function EditRecipeScreen({ route, navigation }) {
             onChangeText={setDescription}
             multiline
             returnKeyType="next"
+            accessibilityLabel="Recipe description"
+            accessibilityRole="text"
           />
         </View>
 
@@ -294,6 +306,8 @@ export default function EditRecipeScreen({ route, navigation }) {
               <Pressable
                 style={[styles.importBtn, { backgroundColor: colors.danger, marginTop: 8 }]}
                 onPress={() => setImageUrl('')}
+                accessibilityLabel="Remove photo"
+                accessibilityRole="button"
               >
                 <Text style={[styles.importBtnText, { fontFamily: MONO, color: '#fff' }]}>REMOVE</Text>
               </Pressable>
@@ -308,8 +322,10 @@ export default function EditRecipeScreen({ route, navigation }) {
                   const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
                   if (!result.canceled && result.assets[0]) setImageUrl(result.assets[0].uri);
                 }}
-              >
-                <Text style={[styles.importBtnText, { fontFamily: MONO, color: colors.text }]}>CAMERA</Text>
+                 accessibilityLabel="Take photo with camera"
+                 accessibilityRole="button"
+               >
+                 <Text style={[styles.importBtnText, { fontFamily: MONO, color: colors.text }]}>CAMERA</Text>
               </Pressable>
               <Pressable
                 style={[styles.importBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5, flex: 1 }]}
@@ -317,8 +333,10 @@ export default function EditRecipeScreen({ route, navigation }) {
                   const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
                   if (!result.canceled && result.assets[0]) setImageUrl(result.assets[0].uri);
                 }}
-              >
-                <Text style={[styles.importBtnText, { fontFamily: MONO, color: colors.text }]}>GALLERY</Text>
+                 accessibilityLabel="Pick photo from gallery"
+                 accessibilityRole="button"
+               >
+                 <Text style={[styles.importBtnText, { fontFamily: MONO, color: colors.text }]}>GALLERY</Text>
               </Pressable>
             </View>
           )}
@@ -336,6 +354,8 @@ export default function EditRecipeScreen({ route, navigation }) {
             returnKeyType="done"
             blurOnSubmit
             onSubmitEditing={() => {}}
+            accessibilityLabel="Personal notes"
+            accessibilityRole="text"
           />
         </View>
 
@@ -364,6 +384,8 @@ export default function EditRecipeScreen({ route, navigation }) {
             onChangeText={setIngredients}
             multiline
             returnKeyType="next"
+            accessibilityLabel="Ingredients, one per line"
+            accessibilityRole="text"
           />
         </View>
 
@@ -383,6 +405,8 @@ export default function EditRecipeScreen({ route, navigation }) {
             onChangeText={setSteps}
             multiline
             returnKeyType="next"
+            accessibilityLabel="Steps, one per line"
+            accessibilityRole="text"
           />
         </View>
 
@@ -395,6 +419,8 @@ export default function EditRecipeScreen({ route, navigation }) {
             placeholder="pasta, italian"
             placeholderTextColor={colors.textMuted}
             returnKeyType="next"
+            accessibilityLabel="Tags, comma separated"
+            accessibilityRole="text"
           />
         </View>
 
@@ -407,6 +433,8 @@ export default function EditRecipeScreen({ route, navigation }) {
             placeholder="e.g. Weeknight Dinners, Desserts"
             placeholderTextColor={colors.textMuted}
             returnKeyType="next"
+            accessibilityLabel="Collection or category"
+            accessibilityRole="text"
           />
           <Text style={[styles.hint, { color: colors.textMuted }]}>
             Group this recipe into a category for easy filtering.
@@ -422,6 +450,8 @@ export default function EditRecipeScreen({ route, navigation }) {
               onChangeText={setPrepMinutes}
               keyboardType="number-pad"
               returnKeyType="next"
+              accessibilityLabel="Prep time in minutes"
+              accessibilityRole="text"
             />
           </View>
           <View style={{ flex: 1, marginBottom: 16 }}>
@@ -432,6 +462,8 @@ export default function EditRecipeScreen({ route, navigation }) {
               onChangeText={setCookMinutes}
               keyboardType="number-pad"
               returnKeyType="next"
+              accessibilityLabel="Cook time in minutes"
+              accessibilityRole="text"
             />
           </View>
           <View style={{ flex: 1, marginBottom: 16 }}>
@@ -442,6 +474,8 @@ export default function EditRecipeScreen({ route, navigation }) {
               onChangeText={setServings}
               keyboardType="number-pad"
               returnKeyType="next"
+              accessibilityLabel="Number of servings"
+              accessibilityRole="text"
             />
           </View>
         </View>
@@ -453,6 +487,9 @@ export default function EditRecipeScreen({ route, navigation }) {
               style={[styles.cleanBtn, { borderColor: colors.primary, backgroundColor: colors.surface }, cleaning && styles.disabled]}
               onPress={cleanUp}
               disabled={cleaning}
+              accessibilityLabel="Clean up with Terry"
+              accessibilityHint="AI tidies formatting without changing the recipe"
+              accessibilityRole="button"
             >
               {cleaning ? (
                 <ActivityIndicator size="small" color={colors.primary} />
@@ -473,6 +510,8 @@ export default function EditRecipeScreen({ route, navigation }) {
           style={[styles.saveBtn, { backgroundColor: colors.primary }, saving && styles.disabled]}
           onPress={save}
           disabled={saving}
+          accessibilityLabel={saving ? 'Saving' : existing ? 'Save changes' : 'Save recipe'}
+          accessibilityRole="button"
         >
           <Text style={[styles.saveBtnText, { fontFamily: 'System', color: colors.onPrimary }]}>
             {saving ? 'SAVING…' : existing ? 'SAVE CHANGES' : 'SAVE RECIPE'}

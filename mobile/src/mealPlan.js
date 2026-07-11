@@ -55,7 +55,7 @@ async function save(plan) {
     try {
       await api.syncMealPlan(plan);
     } catch (e) {
-      console.error('[MealPlan] Server sync failed:', e.message);
+      if (__DEV__) console.error('[MealPlan] Server sync failed:', e.message);
     }
   }
 }
@@ -64,7 +64,7 @@ export async function clearMealPlan() {
   _cache = {};
   await AsyncStorage.removeItem(KEY);
   if (await isServerMode()) {
-    try { await api.syncMealPlan({}); } catch {}
+    try { await api.syncMealPlan({}); } catch (_e) { /* swallowed */ }
   }
   return {};
 }

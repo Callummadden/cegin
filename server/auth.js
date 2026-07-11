@@ -40,23 +40,33 @@ function verifyToken(token) {
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
 
+// ALLOW_ANONYMOUS: when 'false', all routes require a valid JWT.
+// Defaults to 'true' for backward compat with self-hosted open mode.
+const ALLOW_ANONYMOUS = (process.env.ALLOW_ANONYMOUS ?? 'true').toLowerCase() !== 'false';
+
 function authMiddleware(db) {
   return (req, res, next) => {
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) {
-      // No token — allow through without user context (open/self-hosted mode)
-      req.user = null;
-      return next();
+      if (ALLOW_ANONYMOUS) {
+        // Open mode — allow through without user context
+        req.user = null;
+        return next();
+      }
+      return res.status(401).json({ error: 'Authentication required' });
     }
     try {
       const decoded = verifyToken(header.slice(7));
       const user = db.getUserById(decoded.id);
-      req.user = user || null;
+      if (!user) {
+        // Token references a deleted user — reject
+        return res.status(401).json({ error: 'User not found' });
+      }
+      req.user = user;
       next();
     } catch (e) {
-      // Invalid token — allow through without user context
-      req.user = null;
-      next();
+      // Invalid or expired token — reject with 401
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
   };
 }
@@ -73,7 +83,9 @@ async function comparePassword(password, hash) {
 
 module.exports = {
   signToken,
+  verifyToken,
   authMiddleware,
   hashPassword,
   comparePassword,
+  ALLOW_ANONYMOUS,
 };

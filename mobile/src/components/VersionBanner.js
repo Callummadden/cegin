@@ -21,15 +21,15 @@ export default function VersionBanner() {
   // Client is below minimum — blocking warning
   if (status.clientTooOld) {
     return (
-      <View style={[styles.banner, { backgroundColor: '#D32F2F' }]}>
-        <Text style={styles.bannerText}>
+      <View style={[styles.banner, { backgroundColor: colors.danger || '#D32F2F' }]}>
+        <Text style={[styles.bannerText, { color: colors.text || '#fff' }]}>
           ⚠️ App update required (v{CLIENT_VERSION} → v{status.minClientVersion}+)
         </Text>
-        <Text style={styles.bannerSub}>
+        <Text style={[styles.bannerSub, { color: colors.textMuted || 'rgba(255,255,255,0.7)' }]}>
           This version may not work correctly with the server.
         </Text>
         <Pressable onPress={() => setDismissed(true)} style={styles.dismiss} hitSlop={8}>
-          <Text style={styles.dismissText}>✕</Text>
+          <Text style={[styles.dismissText, { color: colors.text || '#fff' }]}>✕</Text>
         </Pressable>
       </View>
     );
@@ -60,13 +60,11 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   bannerText: {
-    color: '#fff',
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   bannerSub: {
-    color: 'rgba(255,255,255,0.7)',
     fontSize: 11,
     marginTop: 2,
   },
@@ -76,7 +74,6 @@ const styles = StyleSheet.create({
     top: 10,
   },
   dismissText: {
-    color: '#fff',
     fontSize: 14,
     fontWeight: '700',
   },

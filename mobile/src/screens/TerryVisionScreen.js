@@ -127,7 +127,7 @@ export default function TerryVisionScreen({ route, navigation }) {
             if (Object.keys(verified).length) setScans(verified);
             if (data.suggestions) setSuggestions(data.suggestions);
           }
-        } catch {}
+        } catch (_e) { if (__DEV__) console.warn(\'[TerryVisionScreen] Caught error:\', _e.message); }
       })();
       return () => { cancelled = true; };
     }, [])
@@ -269,7 +269,7 @@ export default function TerryVisionScreen({ route, navigation }) {
           return { ...prev, [sectionKey]: arr };
         });
         // Clean up the saved photo file
-        try { await FileSystem.deleteAsync(savedUri, { idempotent: true }); } catch {}
+        try { await FileSystem.deleteAsync(savedUri, { idempotent: true }); } catch (_e) { if (__DEV__) console.warn(\'[TerryVisionScreen] Caught error:\', _e.message); }
         showToast({ message: 'Couldn\'t identify any items — try a clearer photo', color: '#ff4444', duration: 4000 });
         return;
       }
@@ -331,7 +331,7 @@ export default function TerryVisionScreen({ route, navigation }) {
     const scan = scans[sectionKey]?.[scanIndex];
     // Delete from server if it has a server ID
     if (scan?.serverId) {
-      try { await api.deleteTerryVisionScan(scan.serverId); } catch {}
+      try { await api.deleteTerryVisionScan(scan.serverId); } catch (_e) { if (__DEV__) console.warn(\'[TerryVisionScreen] Caught error:\', _e.message); }
     }
     setScans((prev) => {
       const arr = [...(prev[sectionKey] || [])];

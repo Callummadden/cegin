@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
-  Image,
   Keyboard,
   Modal,
   Platform,
@@ -16,6 +15,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import * as Speech from 'expo-speech';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api';
@@ -37,15 +37,27 @@ import { useResponsive } from '../utils/responsive';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// ─── Static avatar frames (small PNGs, eager — used in every message) ───────
 const TERRY_FRAMES = [
   require('../../assets/terry-closed.png'),
   require('../../assets/terry-half.png'),
   require('../../assets/terry-open.png'),
   require('../../assets/terry-half.png'),
 ];
-const TERRY_THINKING = require('../../assets/terry-thinking.gif');
-const TERRY_TALKING = require('../../assets/terry-talking.gif');
-const TERRY_IDLE = require('../../assets/terry-idle.gif');
+
+// Animated GIFs — lazy-loaded via getter to defer asset resolution until
+// AssistantScreen mounts (avoids loading heavy GIFs into the bundle upfront)
+let _lazyGifs = null;
+function getTerryGifs() {
+  if (!_lazyGifs) {
+    _lazyGifs = {
+      thinking: require('../../assets/terry-thinking.gif'),
+      talking: require('../../assets/terry-talking.gif'),
+      idle: require('../../assets/terry-idle.gif'),
+    };
+  }
+  return _lazyGifs;
+}
 
 const QUICK_ACTIONS = [
   { label: '🍳 What can I make with what I have?', text: 'Based on my shopping list, what can I make with what I have?' },
@@ -142,7 +154,8 @@ function TypingDots({ color, styles }) {
 // ─── Terry avatar ────────────────────────────────────────────────────────────
 
 function TerryAvatar({ style, onPress, showGif, small, styles }) {
-  const gifSource = showGif === 'talking' ? TERRY_TALKING : showGif === 'thinking' ? TERRY_THINKING : TERRY_IDLE;
+  const gifs = getTerryGifs();
+  const gifSource = showGif === 'talking' ? gifs.talking : showGif === 'thinking' ? gifs.thinking : gifs.idle;
 
   return (
     <Pressable style={style} onPress={onPress} hitSlop={8}>

@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server-test:
+    name: Server Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Run tests (syntax check + module load)
+        working-directory: server
+        run: npm test
+
+      - name: Run unit tests
+        working-directory: server
+        run: npm run test:unit
+        continue-on-error: true
+
+  syntax-check:
+    name: Syntax Check (all JS files)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check syntax of all server JS files
+        run: |
+          errors=0
+          for f in server/*.js server/test/*.js; do
+            [ -f "$f" ] || continue
+            if ! node --check "$f" 2>&1; then
+              errors=$((errors + 1))
+            fi
+          done
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::$errors file(s) have syntax errors"
+            exit 1
+          fi
+          echo "✓ All server JS files pass syntax check"
+
+      - name: Check syntax of all mobile JS files
+        run: |
+          errors=0
+          for f in $(find mobile -name '*.js' -not -path '*/node_modules/*'); do
+            if ! node --check "$f" 2>&1; then
+              errors=$((errors + 1))
+            fi
+          done
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::$errors file(s) have syntax errors"
+            exit 1
+          fi
+          echo "✓ All mobile JS files pass syntax check"

@@ -93,7 +93,7 @@ export async function clearDietaryProfiles() {
   if (await isServerMode()) {
     try {
       await api.clearDietaryProfiles();
-    } catch {}
+    } catch (_e) { if (__DEV__) console.warn(\'[dietProfiles] Caught error:\', _e.message); }
   }
 }
 
@@ -144,7 +144,7 @@ export async function clearActivityContext() {
   if (await isServerMode()) {
     try {
       await api.clearActivityContext();
-    } catch {}
+    } catch (_e) { if (__DEV__) console.warn(\'[dietProfiles] Caught error:\', _e.message); }
   }
 }
 

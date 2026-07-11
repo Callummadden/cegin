@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Cegin Contributors
 // This file is part of Cegin — https://github.com/Callummadden/cegin
 import { useEffect, useRef } from 'react';
-import { Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const DELETE_WIDTH = 80;
 
@@ -13,7 +13,6 @@ const swipeStyles = StyleSheet.create({
     width: DELETE_WIDTH,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E5645B',
     borderRadius: 20,
     zIndex: 0,
   },
@@ -22,7 +21,7 @@ const swipeStyles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 20,
   },
-  deleteText: { color: '#fff', fontWeight: '700', fontSize: 11 },
+  deleteText: { fontWeight: '700', fontSize: 11 },
 });
 
 export default function SwipeableRow({ onDelete, children, colors }) {
@@ -63,10 +62,10 @@ export default function SwipeableRow({ onDelete, children, colors }) {
 
   return (
     <View style={swipeStyles.outer}>
-      <View style={swipeStyles.deleteBg}>
-        <TouchableOpacity style={swipeStyles.deleteBtn} onPress={closeAndDelete} activeOpacity={0.7}>
-          <Text style={swipeStyles.deleteText}>Delete</Text>
-        </TouchableOpacity>
+      <View style={[swipeStyles.deleteBg, { backgroundColor: colors?.danger || '#E5645B' }]}>
+        <Pressable style={swipeStyles.deleteBtn} onPress={closeAndDelete}>
+          <Text style={[swipeStyles.deleteText, { color: colors?.onPrimary || '#fff' }]}>Delete</Text>
+        </Pressable>
       </View>
       <Animated.View
         style={{ transform: [{ translateX }], backgroundColor: colors?.background || '#131010', zIndex: 1 }}

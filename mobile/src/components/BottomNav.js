@@ -42,6 +42,10 @@ export default function BottomNav({ active, navigation }) {
                 }
               }}
               hitSlop={6}
+              accessibilityLabel={`${t.label} tab`}
+              accessibilityHint={isActive ? `Currently on ${t.label}` : `Go to ${t.label}`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
             >
               <Ionicons
                 name={isActive ? t.iconActive : t.icon}

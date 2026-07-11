@@ -132,7 +132,7 @@ export async function clearList() {
   if (await isServerMode()) {
     try {
       await api.clearShoppingList();
-    } catch {}
+    } catch (_e) { if (__DEV__) console.warn(\'[shoppingList] Caught error:\', _e.message); }
   }
   await save([]);
   return [];

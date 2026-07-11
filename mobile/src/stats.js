@@ -48,7 +48,7 @@ export async function getStats(forceRefresh = false) {
       }
       return _cache;
     }
-  } catch {}
+  } catch (_e) { if (__DEV__) console.warn(\'[stats] Caught error:\', _e.message); }
 
   // No local cache — must fetch from server
   if (await isServerMode()) {
@@ -188,7 +188,7 @@ export async function clearStats() {
   if (await isServerMode()) {
     try {
       await api.clearStats();
-    } catch {}
+    } catch (_e) { if (__DEV__) console.warn(\'[stats] Caught error:\', _e.message); }
   }
 
   await AsyncStorage.multiRemove([STATS_KEY, COOK_DATES_KEY]);

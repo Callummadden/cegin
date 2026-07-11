@@ -441,12 +441,15 @@ export default function RecipeListScreen({ navigation }) {
         onPress={() => navigation.navigate('RecipeDetail', { id: item.id })}
         onLongPress={() => setMenuRecipe(item)}
         delayLongPress={400}
+        accessibilityLabel={item.title}
+        accessibilityHint="Opens recipe. Long press for options."
+        accessibilityRole="button"
       >
         {({ pressed }) => (
           <View style={[styles.card, pressed && styles.cardPressed]}>
             <View style={[styles.cardBg, item.image_url ? { overflow: 'hidden' } : { backgroundColor: bg }]}>
               {item.image_url && (
-                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`recipe-${item.id}`} transition={300} />
+                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`recipe-${item.id}`} transition={300} accessibilityLabel={`${item.title} photo`} />
               )}
               <View style={styles.cardDark} />
               {itemCollections.length > 0 && (
@@ -462,6 +465,8 @@ export default function RecipeListScreen({ navigation }) {
                 style={styles.heartBtn}
                 onPress={() => onToggleFav(item.id)}
                 hitSlop={10}
+                accessibilityLabel={isFav ? `Remove ${item.title} from favorites` : `Add ${item.title} to favorites`}
+                accessibilityRole="button"
               >
                 <Text style={[styles.heart, isFav && { color: colors.primary }]}>
                   {isFav ? '♥' : '♡'}
@@ -489,13 +494,16 @@ export default function RecipeListScreen({ navigation }) {
         onPress={() => navigation.navigate('RecipeDetail', { id: item.id })}
         onLongPress={() => setMenuRecipe(item)}
         delayLongPress={400}
+        accessibilityLabel={item.title}
+        accessibilityHint="Opens recipe. Long press for options."
+        accessibilityRole="button"
       >
         {({ pressed }) => (
           <View style={[styles.listItem, pressed && styles.cardPressed]}>
             <View style={[styles.listAccent, { backgroundColor: colors.primary }]} />
             <View style={[styles.listThumb, { backgroundColor: bg }]}>
               {item.image_url ? (
-                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`list-${item.id}`} transition={300} />
+                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`list-${item.id}`} transition={300} accessibilityLabel={`${item.title} photo`} />
               ) : null}
               <View style={styles.cardDark} />
             </View>
@@ -514,7 +522,10 @@ export default function RecipeListScreen({ navigation }) {
                 </View>
               )}
             </View>
-            <Pressable onPress={() => onToggleFav(item.id)} hitSlop={8} style={styles.listFavBtn}>
+            <Pressable onPress={() => onToggleFav(item.id)} hitSlop={8} style={styles.listFavBtn}
+              accessibilityLabel={isFav ? `Remove ${item.title} from favorites` : `Add ${item.title} to favorites`}
+              accessibilityRole="button"
+            >
               <Text style={[styles.heart, { fontSize: 14 }, isFav && { color: colors.primary }]}>
                 {isFav ? '♥' : '♡'}
               </Text>
@@ -537,15 +548,21 @@ export default function RecipeListScreen({ navigation }) {
         onPress={() => navigation.navigate('RecipeDetail', { id: item.id })}
         onLongPress={() => setMenuRecipe(item)}
         delayLongPress={400}
+        accessibilityLabel={item.title}
+        accessibilityHint="Opens recipe. Long press for options."
+        accessibilityRole="button"
       >
         {({ pressed }) => (
           <View style={[styles.gridInner, pressed && styles.cardPressed]}>
             <View style={[styles.gridThumb, { backgroundColor: bg }]}>
               {item.image_url ? (
-                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`grid-${item.id}`} transition={300} />
+                <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={`grid-${item.id}`} transition={300} accessibilityLabel={`${item.title} photo`} />
               ) : null}
               <View style={styles.cardDark} />
-              <Pressable onPress={() => onToggleFav(item.id)} hitSlop={8} style={styles.gridFavBtn}>
+              <Pressable onPress={() => onToggleFav(item.id)} hitSlop={8} style={styles.gridFavBtn}
+                accessibilityLabel={isFav ? `Remove ${item.title} from favorites` : `Add ${item.title} to favorites`}
+                accessibilityRole="button"
+              >
                 <Text style={[styles.heart, { fontSize: 13 }, isFav && { color: colors.primary }]}>
                   {isFav ? '♥' : '♡'}
                 </Text>
@@ -571,6 +588,9 @@ export default function RecipeListScreen({ navigation }) {
         onPress={() => navigation.navigate('RecipeDetail', { id: item.id })}
         onLongPress={() => setMenuRecipe(item)}
         delayLongPress={400}
+        accessibilityLabel={item.title}
+        accessibilityHint="Opens recipe. Long press for options."
+        accessibilityRole="button"
       >
         {({ pressed }) => (
           <View style={[styles.compactRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}>
@@ -582,7 +602,10 @@ export default function RecipeListScreen({ navigation }) {
               </Text>
             </View>
             <Text style={[styles.compactTime, { fontFamily: MONO, color: colors.primary }]}>{total}m</Text>
-            <Pressable onPress={() => onToggleFav(item.id)} hitSlop={6}>
+            <Pressable onPress={() => onToggleFav(item.id)} hitSlop={6}
+              accessibilityLabel={isFav ? `Remove ${item.title} from favorites` : `Add ${item.title} to favorites`}
+              accessibilityRole="button"
+            >
               <Text style={[styles.heart, { fontSize: 12 }, isFav && { color: colors.primary }]}>
                 {isFav ? '♥' : '♡'}
               </Text>
@@ -634,6 +657,8 @@ export default function RecipeListScreen({ navigation }) {
               style={styles.settingsBtn}
               onPress={() => navigation.navigate('Settings')}
               hitSlop={8}
+              accessibilityLabel="Settings"
+              accessibilityRole="button"
             >
               <Ionicons name="settings-outline" size={18} color={colors.textMuted} />
             </Pressable>
@@ -652,10 +677,15 @@ export default function RecipeListScreen({ navigation }) {
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
+              accessibilityLabel="Search recipes"
+              accessibilityRole="search"
             />
           </View>
           <Pressable
             style={[styles.sortBtn, { marginTop: 2 }]}
+            accessibilityLabel={`Sort by ${sortBy}`}
+            accessibilityHint="Cycle sort order"
+            accessibilityRole="button"
             onPress={() => {
               const opts = ['newest', 'quickest', 'az', 'recently_cooked', 'most_cooked'];
               setSortBy(opts[(opts.indexOf(sortBy) + 1) % opts.length]);
@@ -669,6 +699,9 @@ export default function RecipeListScreen({ navigation }) {
             ref={tutorialRefs.view}
             style={[styles.viewBtn, { marginTop: 2 }]}
             onPress={cycleViewMode}
+            accessibilityLabel={`View mode: ${viewMode}`}
+            accessibilityHint="Cycle view mode"
+            accessibilityRole="button"
           >
             <Ionicons name={VIEW_MODES.find((m) => m.key === viewMode)?.icon || 'square-outline'} size={16} color={colors.textMuted} />
           </Pressable>
@@ -688,6 +721,8 @@ export default function RecipeListScreen({ navigation }) {
               key={term}
               onPress={() => { setSearch(term); saveSearchHistory(term); }}
               style={[styles.searchHistoryChip, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+              accessibilityLabel={`Search ${term}`}
+              accessibilityRole="button"
             >
               <Text style={[styles.searchHistoryLabel, { fontFamily: MONO, color: colors.textMuted }]}>{term}</Text>
             </Pressable>
@@ -704,6 +739,8 @@ export default function RecipeListScreen({ navigation }) {
               }, 300);
             }}
             style={[styles.searchHistoryChip, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            accessibilityLabel="Clear search history"
+            accessibilityRole="button"
           >
             <Text style={[styles.searchHistoryLabel, { fontFamily: MONO, color: colors.danger }]}>CLEAR</Text>
           </Pressable>
@@ -729,7 +766,11 @@ export default function RecipeListScreen({ navigation }) {
               requestAnimationFrame(() => {
                 tabScrollRef.current?.scrollTo({ x: Math.max(0, idx * 80 - 100), animated: true });
               });
-            }} style={[styles.tabItem, { borderColor: t === tab ? colors.primary : colors.border, backgroundColor: t === tab ? colors.primary : colors.surface }]}>
+            }} style={[styles.tabItem, { borderColor: t === tab ? colors.primary : colors.border, backgroundColor: t === tab ? colors.primary : colors.surface }]}
+              accessibilityLabel={`${label} tab`}
+              accessibilityState={{ selected: t === tab }}
+              accessibilityRole="tab"
+            >
               <Text style={[
                 styles.tabLabel,
                 { fontFamily: MONO, color: t === tab ? colors.onPrimary : colors.textMuted },
@@ -752,6 +793,8 @@ export default function RecipeListScreen({ navigation }) {
           <Pressable
             style={[styles.emptyBtn, { borderColor: colors.primary }]}
             onPress={() => navigation.navigate('Settings')}
+            accessibilityLabel="Open Settings"
+            accessibilityRole="button"
           >
             <Text style={[styles.emptyBtnText, { fontFamily: MONO, color: colors.primary }]}>OPEN SETTINGS</Text>
           </Pressable>
@@ -762,6 +805,8 @@ export default function RecipeListScreen({ navigation }) {
           <Pressable
             style={[styles.emptyBtn, { borderColor: colors.primary }]}
             onPress={() => load(search)}
+            accessibilityLabel="Retry loading recipes"
+            accessibilityRole="button"
           >
             <Text style={[styles.emptyBtnText, { fontFamily: MONO, color: colors.primary }]}>RETRY</Text>
           </Pressable>
@@ -814,6 +859,9 @@ export default function RecipeListScreen({ navigation }) {
       {/* FAB */}
       <Pressable
         style={[styles.fab, { backgroundColor: colors.primary, bottom: s(activeTimerCount >= 1 ? 160 : 100) }]}
+        accessibilityLabel="Add recipe"
+        accessibilityHint="Choose how to add a new recipe"
+        accessibilityRole="button"
         onPress={() => {
           setModal({
             title: 'Add Recipe',
@@ -855,16 +903,22 @@ export default function RecipeListScreen({ navigation }) {
               placeholder="Collection name..."
               placeholderTextColor={colors.textMuted}
               autoFocus
+              accessibilityLabel="Collection name"
+              accessibilityRole="text"
             />
             <View style={styles.newColBtns}>
               <Pressable
                 style={[styles.newColBtn, { borderColor: colors.border }]}
                 onPress={() => { setNewCollectionModal(false); setNewCollectionName(''); }}
+                accessibilityLabel="Cancel"
+                accessibilityRole="button"
               >
                 <Text style={[styles.newColBtnText, { color: colors.textMuted }]}>CANCEL</Text>
               </Pressable>
               <Pressable
                 style={[styles.newColBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                accessibilityLabel="Create collection"
+                accessibilityRole="button"
                 onPress={async () => {
                   const name = newCollectionName.trim();
                   if (!name) return;
@@ -905,19 +959,27 @@ export default function RecipeListScreen({ navigation }) {
               {menuRecipe?.title?.toUpperCase()}
             </Text>
             <View style={[styles.menuActions, { borderColor: colors.border }]}>
-              <Pressable style={[styles.menuItem]} onPress={handleMenuEdit}>
+              <Pressable style={[styles.menuItem]} onPress={handleMenuEdit}
+                accessibilityLabel="Edit recipe"
+                accessibilityRole="button"
+              >
                 <Text style={[styles.menuIcon]}>✎</Text>
                 <Text style={[styles.menuItemText, { color: colors.text }]}>Edit Recipe</Text>
               </Pressable>
               <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-              <Pressable style={[styles.menuItem]} onPress={handleMenuDelete}>
+              <Pressable style={[styles.menuItem]} onPress={handleMenuDelete}
+                accessibilityLabel="Delete recipe"
+                accessibilityRole="button"
+              >
                 <Text style={[styles.menuIcon, { color: colors.danger }]}>✕</Text>
                 <Text style={[styles.menuItemText, { color: colors.danger }]}>Delete</Text>
-              </Pressable>
-            </View>
-            <Pressable style={[styles.menuCancel, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setMenuRecipe(null)}>
-              <Text style={[styles.menuCancelText, { color: colors.text }]}>Cancel</Text>
-            </Pressable>
+                </Pressable>
+                </View>
+                <Pressable style={[styles.menuCancel, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setMenuRecipe(null)}
+                accessibilityLabel="Close menu"
+                accessibilityRole="button"
+                >
+                <Text style={[styles.menuCancelText, { color: colors.text }]}>Cancel</Text>
           </Pressable>
         </Pressable>
       </Modal>

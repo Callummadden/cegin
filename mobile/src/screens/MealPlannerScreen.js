@@ -214,7 +214,10 @@ export default function MealPlannerScreen({ navigation }) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: 20 + insets.top }]}>
-          <Pressable style={[styles.backBtn, { borderColor: colors.border }]} onPress={() => setPicking(null)}>
+          <Pressable style={[styles.backBtn, { borderColor: colors.border }]} onPress={() => setPicking(null)}
+            accessibilityLabel="Back to meal plan"
+            accessibilityRole="button"
+          >
             <Text style={{ fontSize: 17, color: colors.text }}>←</Text>
           </Pressable>
           <Text style={[styles.title, { color: colors.text }]}>
@@ -233,6 +236,9 @@ export default function MealPlannerScreen({ navigation }) {
             <Pressable
               style={[styles.pickCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
               onPress={() => handlePick(item.id)}
+              accessibilityLabel={item.title}
+              accessibilityHint="Add to meal plan"
+              accessibilityRole="button"
             >
               {item.image_url ? (
                 <Image source={{ uri: proxyImageUrlSync(item.image_url) }} style={styles.pickImg} contentFit="cover" />
@@ -278,7 +284,10 @@ export default function MealPlannerScreen({ navigation }) {
       <View style={[styles.header, { paddingTop: 20 + insets.top }]}>
         <Text style={[styles.title, { color: colors.text }]}>MEAL PLAN</Text>
         {!noAI && (
-        <Pressable onPress={handleAiSuggest} disabled={suggesting} style={[styles.aiBtn, { borderColor: colors.primary }]}>
+        <Pressable onPress={handleAiSuggest} disabled={suggesting} style={[styles.aiBtn, { borderColor: colors.primary }]}
+          accessibilityLabel="Fill week with AI"
+          accessibilityRole="button"
+        >
           {suggesting ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
@@ -290,11 +299,17 @@ export default function MealPlannerScreen({ navigation }) {
 
       {/* Week nav */}
       <View style={styles.weekNav}>
-        <Pressable onPress={() => setWeekOffset((o) => o - 1)} hitSlop={10} style={styles.weekArrowBtn}>
+        <Pressable onPress={() => setWeekOffset((o) => o - 1)} hitSlop={10} style={styles.weekArrowBtn}
+          accessibilityLabel="Previous week"
+          accessibilityRole="button"
+        >
           <Text style={[styles.weekArrow, { color: colors.textMuted }]}>←</Text>
         </Pressable>
         <Text style={[styles.weekLabel, { fontFamily: MONO, color: colors.primary }]}>{weekLabel()}</Text>
-        <Pressable onPress={() => setWeekOffset((o) => o + 1)} hitSlop={10} style={styles.weekArrowBtn}>
+        <Pressable onPress={() => setWeekOffset((o) => o + 1)} hitSlop={10} style={styles.weekArrowBtn}
+          accessibilityLabel="Next week"
+          accessibilityRole="button"
+        >
           <Text style={[styles.weekArrow, { color: colors.textMuted }]}>→</Text>
         </Pressable>
       </View>
@@ -316,6 +331,9 @@ export default function MealPlannerScreen({ navigation }) {
                 today && !active && { borderColor: colors.primary },
               ]}
               onPress={() => setSelectedDay(i)}
+              accessibilityLabel={`${FULL_DAYS[i]}, ${date.getDate()}`}
+              accessibilityState={{ selected: active }}
+              accessibilityRole="tab"
             >
               <Text style={[styles.dayChipName, { color: active ? colors.onPrimary : colors.textMuted }]}>
                 {DAYS[i]}
@@ -369,7 +387,10 @@ export default function MealPlannerScreen({ navigation }) {
                   style={[styles.mealCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 >
                   <View style={[styles.mealCardAccent, { backgroundColor: meta.color }]} />
-                  <Pressable style={styles.mealCardPressable} onPress={() => navigation.navigate('RecipeDetail', { id: recipe.id })}>
+                  <Pressable style={styles.mealCardPressable} onPress={() => navigation.navigate('RecipeDetail', { id: recipe.id })}
+                    accessibilityLabel={`${meta.label}: ${recipe.title}`}
+                    accessibilityRole="button"
+                  >
                     <View style={styles.mealCardLeft}>
                       <Text style={styles.mealCardIcon}>{meta.icon}</Text>
                     </View>
@@ -381,7 +402,10 @@ export default function MealPlannerScreen({ navigation }) {
                       </Text>
                     </View>
                   </Pressable>
-                  <Pressable style={styles.mealCardClear} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); clearMeal(currentKey, meal).then(setPlan); }} hitSlop={12}>
+                  <Pressable style={styles.mealCardClear} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); clearMeal(currentKey, meal).then(setPlan); }} hitSlop={12}
+                    accessibilityLabel={`Remove ${meta.label} recipe`}
+                    accessibilityRole="button"
+                  >
                     <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '700' }}>✕</Text>
                   </Pressable>
                 </View>
@@ -393,6 +417,9 @@ export default function MealPlannerScreen({ navigation }) {
                 key={meal}
                 style={[styles.mealCardEmpty, { borderColor: meta.color, backgroundColor: colors.surface }]}
                 onPress={() => handleSlotPress(currentDate, meal)}
+                accessibilityLabel={`Add ${meta.label} recipe`}
+                accessibilityHint="Tap to add a recipe to this slot"
+                accessibilityRole="button"
               >
                 <Text style={[styles.mealCardEmptyIcon]}>{meta.icon}</Text>
                 <View>
@@ -422,6 +449,9 @@ export default function MealPlannerScreen({ navigation }) {
                   key={g.key}
                   style={[styles.goalCard, { borderColor: selectedGoal === g.key ? colors.primary : colors.border, backgroundColor: selectedGoal === g.key ? colors.primary + '15' : colors.surface }]}
                   onPress={() => runAiPlan(g.key)}
+                  accessibilityLabel={g.label}
+                  accessibilityHint={g.desc}
+                  accessibilityRole="button"
                 >
                   <Text style={styles.goalIcon}>{g.icon}</Text>
                   <Text style={[styles.goalLabel, { color: colors.text }]}>{g.label}</Text>

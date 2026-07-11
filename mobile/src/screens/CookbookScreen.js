@@ -201,7 +201,10 @@ export default function CookbookScreen({ navigation }) {
       <Pressable onLongPress={() => openEdit(item)} delayLongPress={400}>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {item.imageUri ? (
-          <Pressable onPress={() => setFullscreenImage(item.imageUri)}>
+          <Pressable onPress={() => setFullscreenImage(item.imageUri)}
+            accessibilityLabel={`${item.recipeTitle} photo`}
+            accessibilityRole="imagebutton"
+          >
             <Image source={{ uri: item.imageUri }} style={styles.photo} contentFit="cover" />
           </Pressable>
         ) : (
@@ -222,13 +225,21 @@ export default function CookbookScreen({ navigation }) {
                 placeholderTextColor={colors.textMuted}
                 multiline
                 autoFocus
+                accessibilityLabel="Cookbook notes"
+                accessibilityRole="text"
               />
-              <Pressable style={[styles.notesSaveBtn, { backgroundColor: colors.primary }]} onPress={saveNotes}>
+              <Pressable style={[styles.notesSaveBtn, { backgroundColor: colors.primary }]} onPress={saveNotes}
+                accessibilityLabel="Save notes"
+                accessibilityRole="button"
+              >
                 <Text style={[styles.notesSaveText, { color: colors.onPrimary }]}>SAVE</Text>
               </Pressable>
             </View>
           ) : (
-            <Pressable onPress={() => startEditNotes(item)}>
+            <Pressable onPress={() => startEditNotes(item)}
+              accessibilityLabel={item.notes ? 'Edit notes' : 'Add notes'}
+              accessibilityRole="button"
+            >
               <Text style={[styles.cardNotes, { color: colors.text2 }]}>
                 {item.notes || 'Tap to add notes...'}
               </Text>
@@ -249,6 +260,8 @@ export default function CookbookScreen({ navigation }) {
             onPress={handleRefresh}
             hitSlop={8}
             style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center' }}
+            accessibilityLabel="Refresh"
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 14, color: colors.textMuted, lineHeight: 16, textAlign: 'center', includeFontPadding: false }}>↻</Text>
           </Pressable>
@@ -330,14 +343,20 @@ export default function CookbookScreen({ navigation }) {
 
       {/* Fullscreen image viewer */}
       <Modal visible={!!fullscreenImage} transparent animationType="fade" onRequestClose={() => setFullscreenImage(null)}>
-        <Pressable style={styles.fullscreenOverlay} onPress={() => setFullscreenImage(null)}>
+        <Pressable style={styles.fullscreenOverlay} onPress={() => setFullscreenImage(null)}
+          accessibilityLabel="Close fullscreen image"
+          accessibilityRole="button"
+        >
           <Image source={{ uri: fullscreenImage }} style={styles.fullscreenImage} contentFit="contain" />
         </Pressable>
       </Modal>
       {/* Edit entry modal */}
       <Modal visible={!!editEntry} transparent animationType="fade" onRequestClose={() => setEditEntry(null)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <Pressable style={styles.fullscreenOverlay} onPress={() => setEditEntry(null)}>
+        <Pressable style={styles.fullscreenOverlay} onPress={() => setEditEntry(null)}
+          accessibilityLabel="Close edit modal"
+          accessibilityRole="button"
+        >
           <Pressable style={[styles.editCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => {}}>
             <Text style={[styles.editTitle, { fontFamily: MONO, color: colors.text }]}>EDIT ENTRY</Text>
 
@@ -349,7 +368,10 @@ export default function CookbookScreen({ navigation }) {
               </View>
             )}
 
-            <Pressable style={[styles.editPhotoBtn, { borderColor: colors.primary }]} onPress={pickNewPhoto}>
+            <Pressable style={[styles.editPhotoBtn, { borderColor: colors.primary }]} onPress={pickNewPhoto}
+              accessibilityLabel="Change photo"
+              accessibilityRole="button"
+            >
               <Text style={[styles.editPhotoBtnText, { fontFamily: MONO, color: colors.primary }]}>CHANGE PHOTO</Text>
             </Pressable>
 
@@ -360,13 +382,21 @@ export default function CookbookScreen({ navigation }) {
               onChangeText={setEditTitle}
               placeholder="Recipe title"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Recipe title"
+              accessibilityRole="text"
             />
 
             <View style={styles.editActions}>
-              <Pressable style={[styles.editCancelBtn, { borderColor: colors.border }]} onPress={() => setEditEntry(null)}>
+              <Pressable style={[styles.editCancelBtn, { borderColor: colors.border }]} onPress={() => setEditEntry(null)}
+                accessibilityLabel="Cancel"
+                accessibilityRole="button"
+              >
                 <Text style={[styles.editCancelText, { fontFamily: MONO, color: colors.textMuted }]}>CANCEL</Text>
               </Pressable>
-              <Pressable style={[styles.editSaveBtn, { backgroundColor: colors.primary }]} onPress={saveEdit}>
+              <Pressable style={[styles.editSaveBtn, { backgroundColor: colors.primary }]} onPress={saveEdit}
+                accessibilityLabel="Save entry"
+                accessibilityRole="button"
+              >
                 <Text style={[styles.editSaveText, { color: colors.onPrimary }]}>SAVE</Text>
               </Pressable>
             </View>

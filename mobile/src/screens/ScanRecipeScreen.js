@@ -20,6 +20,7 @@ import { MONO, useTheme } from '../theme';
 import AppModal from '../components/AppModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '../utils/responsive';
+import { buildRecipeObject } from '../utils/recipeUtils';
 import { parseRecipeText } from '../utils/recipeParser';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -156,16 +157,14 @@ export default function ScanRecipeScreen({ navigation }) {
     }
   };
 
-  const splitLines = (text) => text.split('\n').map((l) => l.trim()).filter(Boolean);
-
-  const buildRecipe = () => ({
-    title: title.trim(),
-    ingredients: splitLines(ingredients),
-    steps: splitLines(instructions),
-    tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-    prep_minutes: parseInt(prepTime, 10) || 0,
-    cook_minutes: parseInt(cookTime, 10) || 0,
-    servings: parseInt(servings, 10) || 1,
+  const buildRecipe = () => buildRecipeObject({
+    title,
+    ingredients,
+    steps: instructions,
+    tags,
+    prepMinutes: prepTime,
+    cookMinutes: cookTime,
+    servings,
   });
 
   const save = async () => {

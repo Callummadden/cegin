@@ -44,6 +44,22 @@ for (const stmt of [
   }
 }
 
+// Performance indexes — added in v1.3.3
+// These dramatically speed up common queries that filter on user_id
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_recipes_user_id ON recipes(user_id);
+  CREATE INDEX IF NOT EXISTS idx_recipes_user_updated ON recipes(user_id, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_recipe_images_recipe_id ON recipe_images(recipe_id);
+  CREATE INDEX IF NOT EXISTS idx_meal_plans_user_date ON meal_plans(user_id, date);
+  CREATE INDEX IF NOT EXISTS idx_scanned_items_user_consumed_expires ON scanned_items(user_id, consumed, expires_at);
+  CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id);
+  CREATE INDEX IF NOT EXISTS idx_cookbook_entries_user_id ON cookbook_entries(user_id);
+  CREATE INDEX IF NOT EXISTS idx_chat_history_user_timestamp ON chat_history(user_id, timestamp DESC);
+  CREATE INDEX IF NOT EXISTS idx_dietary_profiles_user_id ON dietary_profiles(user_id);
+  CREATE INDEX IF NOT EXISTS idx_terry_vision_scans_user_id ON terry_vision_scans(user_id);
+  CREATE INDEX IF NOT EXISTS idx_shopping_list_user_id ON shopping_list(user_id);
+`);
+
 // ingredients/steps/tags are stored as JSON strings; parse on the way out
 function rowToRecipe(row) {
   if (!row) return null;
@@ -142,9 +158,10 @@ function updateRecipe(id, r, userId) {
        image_url = @image_url,
        notes = @notes, collection = @collection,
        updated_at = datetime('now')
-     WHERE id = @id`
+     WHERE id = @id AND user_id = @userId`
   ).run({
     id,
+    userId,
     title: merged.title,
     description: merged.description,
     ingredients: JSON.stringify(merged.ingredients),
@@ -274,8 +291,9 @@ function updateCollection(id, { name, recipe_ids }, userId) {
   if (!existing) return null;
   const trimmedName = name?.trim();
   try {
-    db.prepare('UPDATE collections SET name = @name, recipe_ids = @recipe_ids WHERE id = @id').run({
+    db.prepare('UPDATE collections SET name = @name, recipe_ids = @recipe_ids WHERE id = @id AND user_id = @userId').run({
       id,
+      userId,
       name: (trimmedName && trimmedName.length > 0) ? trimmedName : existing.name,
       recipe_ids: JSON.stringify(recipe_ids ?? existing.recipe_ids),
     });
@@ -345,20 +363,26 @@ function addRecipeImage(recipeId, imageUrl, userId) {
     const recipe = getRecipe(recipeId, userId);
     if (!recipe) return null;
   }
-  const maxPos = db.prepare('SELECT MAX(position) as p FROM recipe_images WHERE recipe_id = ?').get(recipeId);
-  const pos = (maxPos?.p ?? -1) + 1;
-  const result = db.prepare('INSERT INTO recipe_images (recipe_id, image_url, position) VALUES (?, ?, ?)').run(recipeId, imageUrl, pos);
-  return db.prepare('SELECT * FROM recipe_images WHERE id = ?').get(result.lastInsertRowid);
+  const txn = db.transaction(() => {
+    const maxPos = db.prepare('SELECT MAX(position) as p FROM recipe_images WHERE recipe_id = ?').get(recipeId);
+    const pos = (maxPos?.p ?? -1) + 1;
+    const result = db.prepare('INSERT INTO recipe_images (recipe_id, image_url, position) VALUES (?, ?, ?)').run(recipeId, imageUrl, pos);
+    return db.prepare('SELECT * FROM recipe_images WHERE id = ?').get(result.lastInsertRowid);
+  });
+  return txn();
 }
 
 function deleteRecipeImage(id, userId) {
-  if (userId) {
-    const image = db.prepare('SELECT * FROM recipe_images WHERE id = ?').get(id);
-    if (!image) return false;
-    const recipe = getRecipe(image.recipe_id, userId);
-    if (!recipe) return false;
-  }
-  return db.prepare('DELETE FROM recipe_images WHERE id = ?').run(id).changes > 0;
+  const txn = db.transaction(() => {
+    if (userId) {
+      const image = db.prepare('SELECT * FROM recipe_images WHERE id = ?').get(id);
+      if (!image) return false;
+      const recipe = getRecipe(image.recipe_id, userId);
+      if (!recipe) return false;
+    }
+    return db.prepare('DELETE FROM recipe_images WHERE id = ?').run(id).changes > 0;
+  });
+  return txn();
 }
 
 // ─── Users ─────────────────────────────────────────────────────────────────
@@ -448,46 +472,52 @@ function getNotificationSubscription(userId) {
 }
 
 function upsertNotificationSubscription(userId, { morning_digest, perishable_alerts }) {
-  const existing = getNotificationSubscription(userId);
-  if (existing) {
-    db.prepare(`
-      UPDATE notification_subscriptions SET
-        morning_digest = COALESCE(@morning_digest, morning_digest),
-        perishable_alerts = COALESCE(@perishable_alerts, perishable_alerts),
-        updated_at = datetime('now')
-      WHERE user_id = @user_id
-    `).run({
-      user_id: userId,
-      morning_digest: morning_digest ?? null,
-      perishable_alerts: perishable_alerts ?? null,
-    });
-  } else {
-    db.prepare(`
-      INSERT INTO notification_subscriptions (user_id, morning_digest, perishable_alerts)
-      VALUES (@user_id, @morning_digest, @perishable_alerts)
-    `).run({
-      user_id: userId,
-      morning_digest: morning_digest ?? 1,
-      perishable_alerts: perishable_alerts ?? 1,
-    });
-  }
-  return getNotificationSubscription(userId);
+  const txn = db.transaction(() => {
+    const existing = getNotificationSubscription(userId);
+    if (existing) {
+      db.prepare(`
+        UPDATE notification_subscriptions SET
+          morning_digest = COALESCE(@morning_digest, morning_digest),
+          perishable_alerts = COALESCE(@perishable_alerts, perishable_alerts),
+          updated_at = datetime('now')
+        WHERE user_id = @user_id
+      `).run({
+        user_id: userId,
+        morning_digest: morning_digest ?? null,
+        perishable_alerts: perishable_alerts ?? null,
+      });
+    } else {
+      db.prepare(`
+        INSERT INTO notification_subscriptions (user_id, morning_digest, perishable_alerts)
+        VALUES (@user_id, @morning_digest, @perishable_alerts)
+      `).run({
+        user_id: userId,
+        morning_digest: morning_digest ?? 1,
+        perishable_alerts: perishable_alerts ?? 1,
+      });
+    }
+    return getNotificationSubscription(userId);
+  });
+  return txn();
 }
 
 // ─── Push Tokens CRUD ────────────────────────────────────────────────────
 
 function registerPushToken(userId, token, deviceName) {
-  // Upsert — update if token exists, insert if new
-  const existing = db.prepare('SELECT * FROM push_tokens WHERE token = ?').get(token);
-  if (existing) {
-    // Token already registered — update user_id in case they logged into a different account
-    db.prepare('UPDATE push_tokens SET user_id = ?, device_name = COALESCE(?, device_name) WHERE token = ?')
-      .run(userId, deviceName || null, token);
-  } else {
-    db.prepare('INSERT INTO push_tokens (user_id, token, device_name) VALUES (?, ?, ?)')
-      .run(userId, token, deviceName || '');
-  }
-  return db.prepare('SELECT * FROM push_tokens WHERE token = ?').get(token);
+  const txn = db.transaction(() => {
+    // Upsert — update if token exists, insert if new
+    const existing = db.prepare('SELECT * FROM push_tokens WHERE token = ?').get(token);
+    if (existing) {
+      // Token already registered — update user_id in case they logged into a different account
+      db.prepare('UPDATE push_tokens SET user_id = ?, device_name = COALESCE(?, device_name) WHERE token = ?')
+        .run(userId, deviceName || null, token);
+    } else {
+      db.prepare('INSERT INTO push_tokens (user_id, token, device_name) VALUES (?, ?, ?)')
+        .run(userId, token, deviceName || '');
+    }
+    return db.prepare('SELECT * FROM push_tokens WHERE token = ?').get(token);
+  });
+  return txn();
 }
 
 function removePushToken(token) {
@@ -634,36 +664,39 @@ function getCookDates(userId) {
 
 function recordCook(userId, recipeId, recipeTitle, stepCount) {
   const uid = userId || 0;
-  const stats = getStats(uid);
+  const txn = db.transaction(() => {
+    const stats = getStats(uid);
 
-  // Update stats
-  const newCookCount = stats.cookCount + 1;
-  const newTotalSteps = stats.totalSteps + (stepCount || 0);
-  const counts = { ...stats.recipeCookCounts };
-  if (!counts[recipeId]) counts[recipeId] = { title: recipeTitle, count: 0 };
-  counts[recipeId].count += 1;
-  counts[recipeId].title = recipeTitle;
+    // Update stats
+    const newCookCount = stats.cookCount + 1;
+    const newTotalSteps = stats.totalSteps + (stepCount || 0);
+    const counts = { ...stats.recipeCookCounts };
+    if (!counts[recipeId]) counts[recipeId] = { title: recipeTitle, count: 0 };
+    counts[recipeId].count += 1;
+    counts[recipeId].title = recipeTitle;
 
-  db.prepare(`
-    INSERT INTO cook_stats (user_id, cook_count, total_steps, recipe_cook_counts, updated_at)
-    VALUES (@user_id, @cook_count, @total_steps, @recipe_cook_counts, datetime('now'))
-    ON CONFLICT(user_id) DO UPDATE SET
-      cook_count = @cook_count,
-      total_steps = @total_steps,
-      recipe_cook_counts = @recipe_cook_counts,
-      updated_at = datetime('now')
-  `).run({
-    user_id: uid,
-    cook_count: newCookCount,
-    total_steps: newTotalSteps,
-    recipe_cook_counts: JSON.stringify(counts),
+    db.prepare(`
+      INSERT INTO cook_stats (user_id, cook_count, total_steps, recipe_cook_counts, updated_at)
+      VALUES (@user_id, @cook_count, @total_steps, @recipe_cook_counts, datetime('now'))
+      ON CONFLICT(user_id) DO UPDATE SET
+        cook_count = @cook_count,
+        total_steps = @total_steps,
+        recipe_cook_counts = @recipe_cook_counts,
+        updated_at = datetime('now')
+    `).run({
+      user_id: uid,
+      cook_count: newCookCount,
+      total_steps: newTotalSteps,
+      recipe_cook_counts: JSON.stringify(counts),
+    });
+
+    // Record cook date
+    const today = localDateStr();
+    db.prepare('INSERT OR IGNORE INTO cook_dates (user_id, cook_date) VALUES (?, ?)').run(uid, today);
+
+    return getStats(uid);
   });
-
-  // Record cook date
-  const today = localDateStr();
-  db.prepare('INSERT OR IGNORE INTO cook_dates (user_id, cook_date) VALUES (?, ?)').run(uid, today);
-
-  return getStats(uid);
+  return txn();
 }
 
 function getCookingStreak(userId) {
@@ -690,11 +723,11 @@ function getCookingStreak(userId) {
   return streak;
 }
 
-function clearStats(userId) {
+const clearStats = db.transaction((userId) => {
   const uid = userId || 0;
   db.prepare('DELETE FROM cook_stats WHERE user_id = ?').run(uid);
   db.prepare('DELETE FROM cook_dates WHERE user_id = ?').run(uid);
-}
+});
 
 function getTopRecipes(userId, limit = 5) {
   const stats = getStats(userId);
@@ -788,17 +821,23 @@ function updateCookbookEntry(id, userId, updates) {
 
 function deleteCookbookEntry(id, userId) {
   const uid = userId || 0;
-  const entry = db.prepare('SELECT * FROM cookbook_entries WHERE id = ? AND user_id = ?').get(id, uid);
-  if (!entry) return null;
-  db.prepare('DELETE FROM cookbook_entries WHERE id = ?').run(id);
-  return entry;
+  const txn = db.transaction(() => {
+    const entry = db.prepare('SELECT * FROM cookbook_entries WHERE id = ? AND user_id = ?').get(id, uid);
+    if (!entry) return null;
+    db.prepare('DELETE FROM cookbook_entries WHERE id = ?').run(id);
+    return entry;
+  });
+  return txn();
 }
 
 function clearCookbookEntries(userId) {
   const uid = userId || 0;
-  const entries = db.prepare("SELECT image_path FROM cookbook_entries WHERE user_id = ? AND image_path != ''").all(uid);
-  db.prepare('DELETE FROM cookbook_entries WHERE user_id = ?').run(uid);
-  return entries.map(e => e.image_path).filter(Boolean);
+  const txn = db.transaction(() => {
+    const entries = db.prepare("SELECT image_path FROM cookbook_entries WHERE user_id = ? AND image_path != ''").all(uid);
+    db.prepare('DELETE FROM cookbook_entries WHERE user_id = ?').run(uid);
+    return entries.map(e => e.image_path).filter(Boolean);
+  });
+  return txn();
 }
 
 // ─── Shopping List ───────────────────────────────────────────────────────
@@ -986,18 +1025,24 @@ function addTerryVisionScan(userId, { id, section, imagePath, ingredients }) {
 
 function deleteTerryVisionScan(userId, scanId) {
   const uid = userId || 0;
-  const scan = db.prepare('SELECT * FROM terry_vision_scans WHERE id = ? AND user_id = ?').get(scanId, uid);
-  if (scan) {
-    db.prepare('DELETE FROM terry_vision_scans WHERE id = ?').run(scanId);
-  }
-  return scan;
+  const txn = db.transaction(() => {
+    const scan = db.prepare('SELECT * FROM terry_vision_scans WHERE id = ? AND user_id = ?').get(scanId, uid);
+    if (scan) {
+      db.prepare('DELETE FROM terry_vision_scans WHERE id = ?').run(scanId);
+    }
+    return scan;
+  });
+  return txn();
 }
 
 function clearTerryVisionScans(userId) {
   const uid = userId || 0;
-  const scans = db.prepare("SELECT image_path FROM terry_vision_scans WHERE user_id = ? AND image_path != ''").all(uid);
-  db.prepare('DELETE FROM terry_vision_scans WHERE user_id = ?').run(uid);
-  return scans;
+  const txn = db.transaction(() => {
+    const scans = db.prepare("SELECT image_path FROM terry_vision_scans WHERE user_id = ? AND image_path != ''").all(uid);
+    db.prepare('DELETE FROM terry_vision_scans WHERE user_id = ?').run(uid);
+    return scans;
+  });
+  return txn();
 }
 
 // Get all users who have notification subscriptions with push tokens

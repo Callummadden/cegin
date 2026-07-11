@@ -35,7 +35,7 @@ import { TextSkeleton } from '../components/Skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAi } from '../aiContext';
 import { useResponsive } from '../utils/responsive';
-import { fmtClock } from '../utils/timerUtils';
+import { fmtClock, parseTimerMins } from '../utils/timerUtils';
 
 
 
@@ -44,16 +44,6 @@ const UNIT_MODES = [
   { value: 'metric', label: 'G·ML' },
   { value: 'us', label: 'CUPS' },
 ];
-
-// Parse a rough timer duration (minutes) from step text
-function parseTimerMins(text) {
-  const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b/i);
-  if (hourMatch) return Math.round(parseFloat(hourMatch[1]) * 60);
-  const minMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)\b/i);
-  if (minMatch) return Math.round(parseFloat(minMatch[1]));
-  return null;
-}
-
 
 
 
@@ -132,17 +122,17 @@ export default function RecipeDetailScreen({ route, navigation }) {
           // Run local allergen check (instant, no API needed)
           try {
             const usdaResult = await usdaEstimate(r.ingredients);
-            console.log('[Allergen] USDA matched:', usdaResult?.matched?.length || 0, 'ingredients');
+            if (__DEV__) console.log('[Allergen] USDA matched:', usdaResult?.matched?.length || 0, 'ingredients');
             if (usdaResult && usdaResult.matched.length > 0) {
               const fdcIds = usdaResult.matched.map(m => m.fdc_id).filter(Boolean);
-              console.log('[Allergen] fdcIds:', fdcIds.length);
+              if (__DEV__) console.log('[Allergen] fdcIds:', fdcIds.length);
               if (fdcIds.length > 0) {
                 const flags = await getAllergens(fdcIds);
-                console.log('[Allergen] flags:', JSON.stringify(flags));
+                if (__DEV__) console.log('[Allergen] flags:', JSON.stringify(flags));
                 if (flags) setAllergenFlags(flags);
               }
             }
-          } catch (e) { console.error('[Allergen] Error:', e.message); }
+          } catch (e) { if (__DEV__) console.error('[Allergen] Error:', e.message); }
 
           // Auto-trigger dietary audit if profiles exist (skip if AI disabled)
           if (!noAI) {
@@ -316,7 +306,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
   const shareRecipe = async () => {
     try {
       await Share.share({ message: buildRecipeText() });
-    } catch {}
+    } catch (_e) { /* swallowed */ }
   };
 
 
@@ -373,7 +363,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
         {/* Hero */}
         {recipe.image_url ? (
           <View style={[styles.hero, { overflow: 'hidden' }]}>
-            <Image source={{ uri: proxyImageUrlSync(recipe.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" />
+            <Image source={{ uri: proxyImageUrlSync(recipe.image_url) }} style={StyleSheet.absoluteFill} contentFit="cover" accessibilityLabel={`${recipe.title} photo`} />
             <View style={styles.heroDark} />
             <Pressable style={[styles.backBtn, { top: 14 + insets.top }]} onPress={() => navigation.goBack()}>
               <Text style={styles.backText}>←</Text>
@@ -388,10 +378,16 @@ export default function RecipeDetailScreen({ route, navigation }) {
           <View style={[styles.hero, { backgroundColor: heroBg }]}>
             <View style={styles.heroDark} />
             <Text style={[styles.heroPlaceholder, { fontFamily: MONO }]}>[ PHOTO · HERO ]</Text>
-            <Pressable style={[styles.backBtn, { top: 14 + insets.top }]} onPress={() => navigation.goBack()}>
+            <Pressable style={[styles.backBtn, { top: 14 + insets.top }]} onPress={() => navigation.goBack()}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+            >
               <Text style={styles.backText}>←</Text>
             </Pressable>
-            <Pressable style={[styles.favBtn, { top: 14 + insets.top }]} onPress={onToggleFav}>
+            <Pressable style={[styles.favBtn, { top: 14 + insets.top }]} onPress={onToggleFav}
+              accessibilityLabel={isFav ? "Remove from favorites" : "Add to favorites"}
+              accessibilityRole="button"
+            >
               <Text style={[styles.favText, isFav && { color: colors.primary }]}>
                 {isFav ? '♥' : '♡'}
               </Text>
@@ -535,6 +531,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
           {auditResult && auditResult.audit?.some(e => e.substitutions?.length > 0) && (
             <Pressable
               style={[styles.cta, { backgroundColor: colors.primary, marginTop: 12 }]}
+              accessibilityLabel="Apply Terry's suggestions"
+              accessibilityRole="button"
               onPress={() => {
                 const allSubs = auditResult.audit.flatMap(e => e.substitutions || []);
                 // Parse each substitution into options (split on " or ", ", or ", " / ")
@@ -589,6 +587,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
           <Pressable
             style={[styles.shareBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
             onPress={shareRecipe}
+            accessibilityLabel="Share recipe"
+            accessibilityRole="button"
           >
             <Text style={[styles.shareBtnText, { fontFamily: MONO, color: colors.text2 }]}>↗ SHARE</Text>
           </Pressable>
@@ -603,6 +603,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
           <Pressable
             style={[styles.notesQuickAdd, { borderColor: colors.border }]}
             onPress={() => { setNotesDraft(recipe.notes || ''); setNotesModal(true); }}
+            accessibilityLabel={recipe.notes ? "Edit notes" : "Add notes"}
+            accessibilityRole="button"
           >
             <Text style={[styles.notesQuickAddText, { fontFamily: MONO, color: colors.textMuted }]}>
               {recipe.notes ? '✎ EDIT NOTES' : '+ ADD NOTES…'}
@@ -656,7 +658,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
                       }
                       setNutrition(result);
                       setCachedNutrition(recipe.id, recipe.updated_at, result);
-                    } catch (e) { console.warn('Nutrition estimation failed:', e.message); }
+                    } catch (e) { if (__DEV__) console.warn('Nutrition estimation failed:', e.message); }
                     setLoadingNutrition(false);
                   }}
                 >
@@ -688,7 +690,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
                       }
                       setNutrition(result);
                       setCachedNutrition(recipe.id, recipe.updated_at, result);
-                    } catch (e) { console.warn('Nutrition estimation failed:', e.message); }
+                    } catch (e) { if (__DEV__) console.warn('Nutrition estimation failed:', e.message); }
                     setLoadingNutrition(false);
                   }}
                   hitSlop={8}
@@ -743,6 +745,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
                   style={[styles.servingBtn, { borderColor: colors.border }]}
                   onPress={() => setServings((s) => Math.max(1, s - 1))}
                   hitSlop={6}
+                  accessibilityLabel="Decrease servings"
+                  accessibilityRole="adjustable"
                 >
                   <Text style={[styles.servingBtnText, { color: servings > 1 ? colors.primary : colors.textMuted }]}>−</Text>
                 </Pressable>
@@ -758,6 +762,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
                   style={[styles.servingBtn, { borderColor: colors.border }]}
                   onPress={() => setServings((s) => Math.min(99, s + 1))}
                   hitSlop={6}
+                  accessibilityLabel="Increase servings"
+                  accessibilityRole="adjustable"
                 >
                   <Text style={[styles.servingBtnText, { color: colors.primary }]}>+</Text>
                 </Pressable>
@@ -778,6 +784,9 @@ export default function RecipeDetailScreen({ route, navigation }) {
                   ]}
                   onPress={() => selectUnit(m.value)}
                   disabled={converting}
+                  accessibilityLabel={`${m.label} units`}
+                  accessibilityState={{ selected: unitMode === m.value }}
+                  accessibilityRole="radio"
                 >
                   <Text style={[
                     styles.unitPillText,
@@ -806,6 +815,9 @@ export default function RecipeDetailScreen({ route, navigation }) {
                 key={key}
                 onPress={() => toggleCheck(key)}
                 style={[styles.ingRow, { borderBottomColor: colors.border }]}
+                accessibilityLabel={`${item}${ck ? ', checked' : ''}`}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: ck }}
               >
                 <View style={[styles.checkbox, { borderColor: ck ? colors.primary : colors.border, backgroundColor: ck ? 'rgba(255,90,38,0.14)' : 'transparent' }]}>
                   {ck && <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>✓</Text>}
@@ -833,7 +845,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
                       const result = await api.generatePrepSteps({ title: recipe.title, ingredients: recipe.ingredients, steps: recipe.steps });
                       setPrepSteps(result.steps);
                       setCachedPrep(recipe.id, recipe.updated_at, result.steps);
-                    } catch (e) { console.warn('Prep step generation failed:', e.message); }
+                    } catch (e) { if (__DEV__) console.warn('Prep step generation failed:', e.message); }
                     setLoadingPrep(false);
                   }}
                 >
@@ -848,7 +860,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
                       const result = await api.generatePrepSteps({ title: recipe.title, ingredients: recipe.ingredients, steps: recipe.steps });
                       setPrepSteps(result.steps);
                       setCachedPrep(recipe.id, recipe.updated_at, result.steps);
-                    } catch (e) { console.warn('Prep step generation failed:', e.message); }
+                    } catch (e) { if (__DEV__) console.warn('Prep step generation failed:', e.message); }
                     setLoadingPrep(false);
                   }}
                   hitSlop={8}
@@ -883,7 +895,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
           <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 22 }]}>METHOD</Text>
 
           {(recipe.steps || []).map((step, i) => {
-            const timerMins = parseTimerMins(step);
+            const allTimers = parseTimerMins(step);
+            const timerMins = allTimers.length > 0 ? allTimers[0] : null;
             const t = timers[i];
             let timerLabel = null;
             if (timerMins) {
@@ -903,6 +916,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
                     <Pressable
                       style={[styles.timerBtn, { borderColor: colors.primary, backgroundColor: t?.done ? colors.primary : 'transparent' }]}
                       onPress={() => hitTimer(i, timerMins)}
+                      accessibilityLabel={timerLabel}
+                      accessibilityRole="button"
                     >
                       <Text style={[styles.timerBtnText, { fontFamily: MONO, color: t?.done ? colors.onPrimary : colors.primary }]}>
                         {timerLabel}
@@ -919,6 +934,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
           <Pressable
             style={[styles.shoppingBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
             onPress={() => navigation.navigate('Assistant', { recipe })}
+            accessibilityLabel="Ask Terry about this recipe"
+            accessibilityRole="button"
           >
             <Text style={[styles.shoppingBtnText, { color: colors.text2 }]}>ASK TERRY ABOUT THIS</Text>
           </Pressable>
@@ -927,6 +944,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
           {/* Add to shopping list */}
           <Pressable
             style={[styles.shoppingBtn, { borderColor: colors.primary, backgroundColor: colors.surface }]}
+            accessibilityLabel="Add to shopping list"
+            accessibilityRole="button"
             onPress={async () => {
               await addItems(shownIngredients);
               setModal({ title: 'Added', message: `${shownIngredients.length} items added to your shopping list.`, buttons: [{ text: 'OK', primary: true }] });
@@ -940,12 +959,16 @@ export default function RecipeDetailScreen({ route, navigation }) {
             <Pressable
               style={[styles.actionBtn, { borderColor: colors.border }]}
               onPress={() => navigation.navigate('EditRecipe', { recipe })}
+              accessibilityLabel="Edit recipe"
+              accessibilityRole="button"
             >
               <Text style={[styles.actionBtnText, { color: colors.text2 }]}>EDIT</Text>
             </Pressable>
             <Pressable
               style={[styles.actionBtn, { borderColor: colors.danger }]}
               onPress={confirmDelete}
+              accessibilityLabel="Delete recipe"
+              accessibilityRole="button"
             >
               <Text style={[styles.actionBtnText, { color: colors.danger }]}>DELETE</Text>
             </Pressable>
@@ -958,6 +981,9 @@ export default function RecipeDetailScreen({ route, navigation }) {
         <Pressable
           style={[styles.cta, { backgroundColor: colors.primary }]}
           onPress={() => navigation.navigate('CookMode', { recipe })}
+          accessibilityLabel="Start cooking"
+          accessibilityHint="Enter cook mode for this recipe"
+          accessibilityRole="button"
         >
           <Text style={[styles.ctaText, { color: colors.onPrimary }]}>START COOKING →</Text>
         </Pressable>

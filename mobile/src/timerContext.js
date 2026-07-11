@@ -46,7 +46,21 @@ export function TimerProvider({ children }) {
   }, []);
 
   // ─── Tick: sync t.left to wall-clock time every 500ms ─────────
+  // Only run the interval when there are active timers with an endTime
+  const hasRunningTimers = useMemo(
+    () => Object.values(timers).some((t) => t.running && t.endTime),
+    [timers],
+  );
+
   useEffect(() => {
+    if (!hasRunningTimers) {
+      // No running timers — clear any existing interval to save CPU/battery
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
     intervalRef.current = setInterval(() => {
       const now = Date.now();
       setTimers((prev) => {
@@ -70,7 +84,7 @@ export function TimerProvider({ children }) {
       });
     }, 500);
     return () => clearInterval(intervalRef.current);
-  }, []);
+  }, [hasRunningTimers]);
 
   // ─── Background/foreground handling ───────────────────────────
   useEffect(() => {

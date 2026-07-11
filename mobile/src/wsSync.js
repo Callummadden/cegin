@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Cegin Contributors
 // This file is part of Cegin — https://github.com/Callummadden/cegin
 import { AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getServerUrl, getAppMode } from './config';
 import { clearCache as clearShoppingCache } from './shoppingList';
 import { clearCache as clearMealPlanCache } from './mealPlan';
@@ -61,7 +62,7 @@ function debouncedNotify(type, action) {
     const subs = subscribers.get(type);
     if (subs) {
       for (const cb of subs) {
-        try { cb(action); } catch (e) { console.error('[WS] Subscriber error:', e); }
+        try { cb(action); } catch (e) { if (__DEV__) console.error('[WS] Subscriber error:', e); }
       }
     }
 
@@ -69,7 +70,7 @@ function debouncedNotify(type, action) {
     const wildcardSubs = subscribers.get('*');
     if (wildcardSubs) {
       for (const cb of wildcardSubs) {
-        try { cb(type, action); } catch (e) { console.error('[WS] Wildcard subscriber error:', e); }
+        try { cb(type, action); } catch (e) { if (__DEV__) console.error('[WS] Wildcard subscriber error:', e); }
       }
     }
   }, 150));
@@ -84,7 +85,12 @@ export async function connect() {
   const baseUrl = await getServerUrl();
   if (!baseUrl) return;
 
-  const wsUrl = baseUrl.replace(/^http/, 'ws') + '/ws';
+  // Include JWT token for authenticated WebSocket connections
+  let wsUrl = baseUrl.replace(/^http/, 'ws') + '/ws';
+  try {
+    const token = await AsyncStorage.getItem('cegin_auth_token');
+    if (token) wsUrl += '?token=' + encodeURIComponent(token);
+  } catch (_e) { /* no token — open mode */ }
 
   // Already connected and alive — skip
   if (ws && ws.readyState === 1 && (Date.now() - lastPong) < 30000) {
@@ -93,7 +99,7 @@ export async function connect() {
 
   // Force close any existing stale connection
   if (ws) {
-    try { ws.close(); } catch {}
+    try { ws.close(); } catch (_e) { /* swallowed */ }
     ws = null;
   }
   stopPing();
@@ -104,7 +110,7 @@ export async function connect() {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log('[WS] Connected to', wsUrl);
+      if (__DEV__) console.log('[WS] Connected to', wsUrl);
       reconnectDelay = 1000;
       lastPong = Date.now();
       startPing();
@@ -115,9 +121,9 @@ export async function connect() {
         const clearer = cacheClearers[type];
         if (clearer) clearer();
         const subs = subscribers.get(type);
-        if (subs) for (const cb of subs) try { cb('changed'); } catch {}
+        if (subs) for (const cb of subs) try { cb('changed'); } catch (_e) { /* swallowed */ }
         const wildcardSubs = subscribers.get('*');
-        if (wildcardSubs) for (const cb of wildcardSubs) try { cb(type, 'changed'); } catch {}
+        if (wildcardSubs) for (const cb of wildcardSubs) try { cb(type, 'changed'); } catch (_e) { /* swallowed */ }
       }
     };
 
@@ -133,15 +139,15 @@ export async function connect() {
         }
 
         const { type, action } = msg;
-        console.log('[WS] Received:', type, action);
+        if (__DEV__) console.log('[WS] Received:', type, action);
         debouncedNotify(type, action);
       } catch (e) {
-        console.error('[WS] Failed to parse message:', e);
+        if (__DEV__) console.error('[WS] Failed to parse message:', e);
       }
     };
 
     ws.onclose = (event) => {
-      console.log('[WS] Disconnected', event.code, event.reason);
+      if (__DEV__) console.log('[WS] Disconnected', event.code, event.reason);
       ws = null;
       stopPing();
       if (!intentionalClose) {
@@ -153,7 +159,7 @@ export async function connect() {
       // onclose fires after this with the real error info
     };
   } catch (e) {
-    console.error('[WS] Connection failed:', e.message);
+    if (__DEV__) console.error('[WS] Connection failed:', e.message);
     scheduleReconnect();
   }
 }
@@ -166,7 +172,7 @@ export function disconnect() {
     reconnectTimer = null;
   }
   if (ws) {
-    try { ws.close(); } catch {}
+    try { ws.close(); } catch (_e) { /* swallowed */ }
     ws = null;
   }
 }
@@ -186,9 +192,9 @@ function startPing() {
       ws.send(JSON.stringify({ type: 'ping' }));
     } catch {
       // Connection is dead
-      console.log('[WS] Ping send failed — reconnecting');
+      if (__DEV__) console.log('[WS] Ping send failed — reconnecting');
       stopPing();
-      try { ws.close(); } catch {}
+      try { ws.close(); } catch (_e) { /* swallowed */ }
       ws = null;
       scheduleReconnect();
       return;
@@ -198,9 +204,9 @@ function startPing() {
     pongTimeout = setTimeout(() => {
       const timeSinceLastPong = Date.now() - lastPong;
       if (timeSinceLastPong > 15000) {
-        console.log('[WS] No pong for ' + Math.round(timeSinceLastPong / 1000) + 's — reconnecting');
+        if (__DEV__) console.log('[WS] No pong for ' + Math.round(timeSinceLastPong / 1000) + 's — reconnecting');
         stopPing();
-        if (ws) { try { ws.close(); } catch {} ws = null; }
+        if (ws) { try { ws.close(); } catch (_e) { /* swallowed */ } ws = null; }
         scheduleReconnect();
       }
     }, 10000);
@@ -218,7 +224,7 @@ function scheduleReconnect() {
   if (intentionalClose) return;
   if (reconnectTimer) return;
 
-  console.log(`[WS] Reconnecting in ${reconnectDelay / 1000}s...`);
+  if (__DEV__) console.log(`[WS] Reconnecting in ${reconnectDelay / 1000}s...`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connect();
@@ -241,9 +247,9 @@ export function initAppStateListener() {
 
     if (wasBackground && isNowActive) {
       // App came to foreground — force full teardown and reconnect
-      console.log('[WS] App foregrounded — forcing reconnect');
+      if (__DEV__) console.log('[WS] App foregrounded — forcing reconnect');
       intentionalClose = false;
-      if (ws) { try { ws.onclose = null; ws.close(); } catch {} ws = null; }
+      if (ws) { try { ws.onclose = null; ws.close(); } catch (_e) { /* swallowed */ } ws = null; }
       stopPing();
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       reconnectDelay = 1000;

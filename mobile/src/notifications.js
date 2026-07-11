@@ -62,7 +62,7 @@ export async function initNotifications() {
       });
       _channelReady = true;
     } catch (e) {
-      console.warn('[notifications] Channel creation failed:', e);
+      if (__DEV__) console.warn('[notifications] Channel creation failed:', e);
     }
   }
   // Check exact alarm permission on Android 12+
@@ -71,7 +71,7 @@ export async function initNotifications() {
     if (NativeModules.ExactAlarm) {
       const canSchedule = await NativeModules.ExactAlarm.canSchedule();
       if (!canSchedule) {
-        console.warn('[notifications] Exact alarms not allowed — opening settings');
+        if (__DEV__) console.warn('[notifications] Exact alarms not allowed — opening settings');
         NativeModules.ExactAlarm.openSettings();
       }
     }
@@ -83,7 +83,7 @@ export async function initNotifications() {
 export async function requestPermissions() {
   const n = N();
   if (n) {
-    try { await n.requestPermissionsAsync(); } catch {}
+    try { await n.requestPermissionsAsync(); } catch (_e) { /* swallowed */ }
   }
 }
 
@@ -148,7 +148,7 @@ export async function registerForPushNotifications(registerFn) {
 export async function scheduleNotification(seconds, title, body) {
   const n = N();
   if (!n) {
-    console.warn('[notifications] Module not available');
+    if (__DEV__) console.warn('[notifications] Module not available');
     return null;
   }
   try {
@@ -166,10 +166,10 @@ export async function scheduleNotification(seconds, title, body) {
         channelId: 'timers',
       },
     });
-    console.log(`[notifications] Scheduled "${title}" in ${seconds}s → ${id}`);
+    if (__DEV__) console.log(`[notifications] Scheduled "${title}" in ${seconds}s → ${id}`);
     return id;
   } catch (e) {
-    console.warn('[notifications] scheduleNotification failed:', e?.message || e);
+    if (__DEV__) console.warn('[notifications] scheduleNotification failed:', e?.message || e);
     return null;
   }
 }
@@ -180,7 +180,7 @@ export async function cancelNotification(id) {
     try {
       await n.cancelScheduledNotificationAsync(id);
       await n.dismissNotificationAsync(id);
-    } catch {}
+    } catch (_e) { /* swallowed */ }
   }
 }
 
@@ -190,6 +190,6 @@ export async function cancelAllNotifications() {
     try {
       await n.cancelAllScheduledNotificationsAsync();
       await n.dismissAllNotificationsAsync();
-    } catch {}
+    } catch (_e) { /* swallowed */ }
   }
 }

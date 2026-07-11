@@ -324,7 +324,10 @@ export default function ShoppingListScreen({ navigation }) {
         <View style={[styles.floatingTop, { paddingTop: 20 + insets.top }]}>
           <View style={[styles.topNav, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Pressable style={[styles.backBtn, { borderColor: colors.border }]} onPress={() => { setPickingRecipes(false); setPickSearch(''); }}>
+              <Pressable style={[styles.backBtn, { borderColor: colors.border }]} onPress={() => { setPickingRecipes(false); setPickSearch(''); }}
+                accessibilityLabel="Back to shopping list"
+                accessibilityRole="button"
+              >
                 <Text style={{ fontSize: 17, color: colors.text }}>←</Text>
               </Pressable>
               <Text style={[styles.title, { color: colors.text }]}>PICK RECIPES</Text>
@@ -338,9 +341,14 @@ export default function ShoppingListScreen({ navigation }) {
                 value={pickSearch}
                 onChangeText={setPickSearch}
                 autoCorrect={false}
+                accessibilityLabel="Search recipes"
+                accessibilityRole="search"
               />
               {pickSearch.length > 0 && (
-                <Pressable onPress={() => setPickSearch('')} hitSlop={8}>
+                <Pressable onPress={() => setPickSearch('')} hitSlop={8}
+                  accessibilityLabel="Clear search"
+                  accessibilityRole="button"
+                >
                   <Text style={{ color: colors.textMuted, fontSize: 14 }}>✕</Text>
                 </Pressable>
               )}
@@ -358,7 +366,11 @@ export default function ShoppingListScreen({ navigation }) {
           renderItem={({ item }) => {
             const sel = selectedIds.has(item.id);
             return (
-              <Pressable style={[styles.pickItem, { borderColor: sel ? colors.primary : colors.border }]} onPress={() => toggleSelect(item.id)}>
+              <Pressable style={[styles.pickItem, { borderColor: sel ? colors.primary : colors.border }]} onPress={() => toggleSelect(item.id)}
+                accessibilityLabel={`${item.title}${sel ? ', selected' : ''}`}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: sel }}
+              >
                 <View style={[styles.checkbox, { borderColor: sel ? colors.primary : colors.border, backgroundColor: sel ? 'rgba(255,90,38,0.14)' : 'transparent' }]}>
                   {sel && <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>✓</Text>}
                 </View>
@@ -368,7 +380,10 @@ export default function ShoppingListScreen({ navigation }) {
           }}
         />
         {selectedIds.size > 0 && (
-          <Pressable style={[styles.generateBtn, { backgroundColor: colors.primary }]} onPress={generateSmartList}>
+          <Pressable style={[styles.generateBtn, { backgroundColor: colors.primary }]} onPress={generateSmartList}
+            accessibilityLabel={`Generate list from ${selectedIds.size} recipes`}
+            accessibilityRole="button"
+          >
             <Text style={[styles.generateBtnText, { color: colors.onPrimary }]}>
               GENERATE LIST ({selectedIds.size} recipes)
             </Text>
@@ -405,13 +420,18 @@ export default function ShoppingListScreen({ navigation }) {
             <Text style={[styles.title, { color: colors.text }]}>SHOPPING LIST</Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {!noAI && (
-                <Pressable onPress={startSmartList} style={[styles.smartBtn, { borderColor: colors.primary }]}>
+                <Pressable onPress={startSmartList} style={[styles.smartBtn, { borderColor: colors.primary }]}
+                  accessibilityLabel="Auto generate shopping list"
+                  accessibilityRole="button"
+                >
                   <Text style={[styles.smartBtnText, { fontFamily: MONO, color: colors.primary }]}>AUTO</Text>
                 </Pressable>
               )}
               <Pressable
                 style={[styles.quickMenuBtn, { borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 8 }]}
                 onPress={() => setQuickMenuOpen(true)}
+                accessibilityLabel="Quick add items"
+                accessibilityRole="button"
               >
                 <Text style={[styles.quickMenuBtnText, { fontFamily: MONO, color: colors.text2 }]}>⚡</Text>
               </Pressable>
@@ -427,8 +447,13 @@ export default function ShoppingListScreen({ navigation }) {
               onSubmitEditing={handleAdd}
               returnKeyType="done"
               multiline
+              accessibilityLabel="Add shopping items"
+              accessibilityRole="text"
             />
-            <Pressable style={[styles.addBtn, { backgroundColor: colors.primary }]} onPress={handleAdd}>
+            <Pressable style={[styles.addBtn, { backgroundColor: colors.primary }]} onPress={handleAdd}
+              accessibilityLabel="Add items"
+              accessibilityRole="button"
+            >
               <Text style={[styles.addBtnText, { color: colors.onPrimary }]}>+</Text>
             </Pressable>
           </View>
@@ -471,7 +496,11 @@ export default function ShoppingListScreen({ navigation }) {
           }
           return (
             <SwipeableRow onDelete={() => handleSwipeDelete(item)} colors={colors}>
-              <Pressable style={[styles.item, { borderBottomColor: colors.border }]} onPress={() => handleToggle(item.id)}>
+              <Pressable style={[styles.item, { borderBottomColor: colors.border }]} onPress={() => handleToggle(item.id)}
+                accessibilityLabel={`${item.text}${item.checked ? ', checked' : ''}`}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: item.checked }}
+              >
                 <View style={[styles.checkbox, {
                   borderColor: item.checked ? colors.primary : colors.border,
                   backgroundColor: item.checked ? 'rgba(255,90,38,0.14)' : 'transparent',
@@ -495,7 +524,10 @@ export default function ShoppingListScreen({ navigation }) {
         }}
         ListFooterComponent={
           checkedCount > 0 ? (
-            <Pressable style={[styles.clearBtn, { borderColor: colors.border }]} onPress={handleClearChecked}>
+            <Pressable style={[styles.clearBtn, { borderColor: colors.border }]} onPress={handleClearChecked}
+              accessibilityLabel={`Clear ${checkedCount} checked items`}
+              accessibilityRole="button"
+            >
               <Text style={[styles.clearText, { fontFamily: MONO, color: colors.textMuted }]}>
                 CLEAR {checkedCount} CHECKED
               </Text>

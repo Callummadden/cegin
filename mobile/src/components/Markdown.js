@@ -7,7 +7,7 @@ import { MONO } from '../theme';
 // Lightweight markdown renderer for chat bubbles.
 // Handles: **bold**, *italic*, # headers, - lists, `code`, ```code blocks```
 
-function parseInline(text, baseStyle) {
+function parseInline(text, baseStyle, colors) {
   if (!text) return [null];
   const parts = [];
   // Match **bold**, *italic*, `code`
@@ -18,7 +18,7 @@ function parseInline(text, baseStyle) {
     if (m.index > last) parts.push(<Text key={last}>{text.slice(last, m.index)}</Text>);
     if (m[2]) parts.push(<Text key={m.index} style={{ fontWeight: '700' }}>{m[2]}</Text>);
     else if (m[3]) parts.push(<Text key={m.index} style={{ fontStyle: 'italic' }}>{m[3]}</Text>);
-    else if (m[4]) parts.push(<Text key={m.index} style={{ fontFamily: MONO, fontSize: 12.5, backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 3, borderRadius: 3 }}>{m[4]}</Text>);
+    else if (m[4]) parts.push(<Text key={m.index} style={{ fontFamily: MONO, fontSize: 12.5, backgroundColor: colors?.surface2 || 'rgba(255,255,255,0.08)', paddingHorizontal: 3, borderRadius: 3 }}>{m[4]}</Text>);
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(<Text key={last}>{text.slice(last)}</Text>);
@@ -45,7 +45,7 @@ export default function Markdown({ children, colors }) {
       }
       if (i < lines.length) i++; // skip closing ```
       elements.push(
-        <View key={`code-${i}`} style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: 10, marginVertical: 6 }}>
+        <View key={`code-${i}`} style={{ backgroundColor: colors?.surface || 'rgba(255,255,255,0.06)', borderRadius: 8, padding: 10, marginVertical: 6 }}>
           <Text style={{ fontFamily: MONO, fontSize: 12.5, color: colors?.text || '#F6F1EA', lineHeight: 18 }}>
             {codeLines.join('\n')}
           </Text>
@@ -75,7 +75,7 @@ export default function Markdown({ children, colors }) {
         <View key={`li-${i}`} style={{ flexDirection: 'row', marginVertical: 2, paddingLeft: 8 }}>
           <Text style={{ color: colors?.primary || '#FF5A26', marginRight: 6, marginTop: 1 }}>•</Text>
           <Text style={{ flex: 1, color: colors?.text2 || '#E2D9CF', fontSize: 14, lineHeight: 21 }}>
-            {parseInline(bulletMatch[2], { color: colors?.text2 || '#E2D9CF' })}
+            {parseInline(bulletMatch[2], { color: colors?.text2 || '#E2D9CF' }, colors)}
           </Text>
         </View>
       );
@@ -90,7 +90,7 @@ export default function Markdown({ children, colors }) {
         <View key={`ol-${i}`} style={{ flexDirection: 'row', marginVertical: 2, paddingLeft: 8 }}>
           <Text style={{ color: colors?.primary || '#FF5A26', marginRight: 6, marginTop: 1, fontWeight: '600', fontSize: 13 }}>{numMatch[2]}.</Text>
           <Text style={{ flex: 1, color: colors?.text2 || '#E2D9CF', fontSize: 14, lineHeight: 21 }}>
-            {parseInline(numMatch[3], { color: colors?.text2 || '#E2D9CF' })}
+            {parseInline(numMatch[3], { color: colors?.text2 || '#E2D9CF' }, colors)}
           </Text>
         </View>
       );
@@ -117,7 +117,7 @@ export default function Markdown({ children, colors }) {
     // Regular paragraph
     elements.push(
       <Text key={`p-${i}`} style={{ color: colors?.text2 || '#E2D9CF', fontSize: 14, lineHeight: 21, marginVertical: 2 }}>
-        {parseInline(line, { color: colors?.text2 || '#E2D9CF' })}
+        {parseInline(line, { color: colors?.text2 || '#E2D9CF' }, colors)}
       </Text>
     );
     i++;

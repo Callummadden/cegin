@@ -46,7 +46,7 @@ export default function StatsScreen({ navigation }) {
       setTopRecipes(t);
       setShopItems(sh);
       setProfiles(p);
-    } catch (e) { console.warn('Stats load failed:', e.message); }
+    } catch (e) { if (__DEV__) console.warn('Stats load failed:', e.message); }
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));

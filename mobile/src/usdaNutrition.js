@@ -30,30 +30,30 @@ async function getDb() {
         await testDb.closeAsync();
         const storedVersion = metaVer ? parseInt(metaVer.value, 10) : 0;
         if (!tables || !ver || ver.c < 1000 || storedVersion < DB_VERSION) {
-          console.log('[USDA] DB stale or empty, deleting...');
+          if (__DEV__) console.log('[USDA] DB stale or empty, deleting...');
           await FileSystem.deleteAsync(dbPath);
         }
-      } catch {
+      } catch (e) { if (__DEV__) console.warn('[USDA] DB validation failed, re-copying:', e.message);
         await FileSystem.deleteAsync(dbPath);
       }
     }
 
     const freshInfo = await FileSystem.getInfoAsync(dbPath);
     if (!freshInfo.exists) {
-      console.log('[USDA] Copying nutrition DB from assets...');
+      if (__DEV__) console.log('[USDA] Copying nutrition DB from assets...');
       const asset = Asset.fromModule(require('../assets/usda-nutrition.db'));
       await asset.downloadAsync();
-      console.log('[USDA] Asset URI:', asset.localUri);
+      if (__DEV__) console.log('[USDA] Asset URI:', asset.localUri);
       await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}SQLite`, { intermediates: true });
       await FileSystem.copyAsync({ from: asset.localUri, to: dbPath });
-      console.log('[USDA] Copied to:', dbPath);
+      if (__DEV__) console.log('[USDA] Copied to:', dbPath);
     }
 
     db = await SQLite.openDatabaseAsync(dbPath);
-    console.log('[USDA] Database opened from:', dbPath);
+    if (__DEV__) console.log('[USDA] Database opened from:', dbPath);
     return db;
   } catch (e) {
-    console.error('[USDA] Failed to open database:', e.message);
+    if (__DEV__) console.error('[USDA] Failed to open database:', e.message);
     return null;
   }
 }
@@ -343,7 +343,7 @@ async function estimateGramsFromDb(qty, unit, foodName, fdcId) {
       if (customRow && customRow.gram_weight > 0) {
         return qty * customRow.gram_weight;
       }
-    } catch (e) {}
+    } catch (e) { if (__DEV__) console.warn('[USDA] custom unit lookup error:', e.message); }
   }
 
   // Fallback to generic estimate
@@ -504,21 +504,21 @@ async function searchFood(query) {
   // Translate UK terms to US and check preferred terms
   const translated = translateToUS(q);
   const searchTerm = PREFERRED_TERMS[translated] || PREFERRED_TERMS[q] || translated;
-  if (q !== translated) console.log('[USDA] UK->US:', q, '->', translated);
+  if (q !== translated) { if (__DEV__) console.log('[USDA] UK->US:', q, '->', translated); }
 
   // Strategy 1: Exact description match
   try {
     const exact = await d.getFirstAsync(
       "SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.description) = ? LIMIT 1", [searchTerm]);
-    if (exact) { console.log('[USDA] Exact:', q, '->', exact.description); return exact; }
-  } catch (e) { console.log('[USDA] Exact error:', e.message); }
+    if (exact) { if (__DEV__) console.log('[USDA] Exact:', q, '->', exact.description); log
+  } catch (e) { if (__DEV__) console.log('[USDA] Exact error:', e.message); }
 
   // Strategy 2: Description STARTS with query ("oats" matches "Oats, rolled")
   try {
     const starts = await d.getFirstAsync(
       "SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.description) LIKE ? ORDER BY LENGTH(f.description) ASC LIMIT 1", [q + '%']);
-    if (starts) { console.log('[USDA] Starts:', q, '->', starts.description); return starts; }
-  } catch (e) { console.log('[USDA] Starts error:', e.message); }
+    if (starts) { if (__DEV__) console.log('[USDA] Starts:', q, '->', starts.description); log
+  } catch (e) { if (__DEV__) console.log('[USDA] Starts error:', e.message); }
 
   // Strategy 3: Alias match (UK/AU/CA terms stored in aliases column)
   // Try both the original query AND the translated/preferred term
@@ -529,8 +529,8 @@ async function searchFood(query) {
         'SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.aliases) LIKE ? ORDER BY LENGTH(f.description) ASC LIMIT 1',
         ['%' + term + '%']
       );
-      if (aliasExact) { console.log('[USDA] Alias:', q, '(via', term, ')->', aliasExact.description); return aliasExact; }
-    } catch (e) {}
+      if (aliasExact) { if (__DEV__) console.log('[USDA] Alias:', q, '(via', term, ')->', aliasExact.description); log
+    } catch (e) { if (__DEV__) console.warn('[USDA] Alias search error:', e.message); }
   }
 
   // Strategy 4: FTS5 match (searches description + aliases)
@@ -543,10 +543,10 @@ async function searchFood(query) {
       // Prefer entries with complete nutrition (protein > 0)
       const withProtein = ftsResults.filter(r => r.protein_g > 0);
       const ftsResult = withProtein.length > 0 ? withProtein[0] : ftsResults[0];
-      console.log('[USDA] FTS:', q, '->', ftsResult.description, '(protein:', ftsResult.protein_g, ')');
+      if (__DEV__) console.log('[USDA] FTS:', q, '->', ftsResult.description, '(protein:', ftsResult.protein_g, ')');
       return ftsResult;
     }
-  } catch (e) { console.log('[USDA] FTS error:', e.message); }
+  } catch (e) { if (__DEV__) console.log('[USDA] FTS error:', e.message); }
 
   // Strategy 5: De-pluralization fallback — strip trailing "s" from words
   const singular = searchTerm.replace(/(\w)s/g, (m, w) => {
@@ -560,8 +560,8 @@ async function searchFood(query) {
         "SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.description) LIKE ? ORDER BY LENGTH(f.description) ASC LIMIT 1",
         ['%' + singular + '%']
       );
-      if (singularResult) { console.log('[USDA] Singular:', q, '(', singular, ')->', singularResult.description); return singularResult; }
-    } catch (e) {}
+      if (singularResult) { if (__DEV__) console.log('[USDA] Singular:', q, '(', singular, ')->', singularResult.description); log
+    } catch (e) { if (__DEV__) console.warn('[USDA] Singular search error:', e.message); }
   }
 
   // Strategy 6: Last significant word starts-with
@@ -571,11 +571,11 @@ async function searchFood(query) {
     try {
       const last = await d.getFirstAsync(
         "SELECT f.fdc_id, f.description, n.calories, n.protein_g, n.carbs_g, n.fat_g, n.fiber_g FROM foods f JOIN nutrients n ON n.fdc_id = f.fdc_id WHERE LOWER(f.description) LIKE ? ORDER BY LENGTH(f.description) ASC LIMIT 1", [lastWord + '%']);
-      if (last) { console.log('[USDA] Last:', lastWord, '->', last.description); return last; }
-    } catch (e) { console.log('[USDA] Last error:', e.message); }
+      if (last) { if (__DEV__) console.log('[USDA] Last:', lastWord, '->', last.description); log
+    } catch (e) { if (__DEV__) console.log('[USDA] Last error:', e.message); }
   }
 
-  console.log('[USDA] No match for:', query);
+  if (__DEV__) console.log('[USDA] No match for:', query);
   return null;
 }
 export async function estimateNutrition(ingredients) {
@@ -593,7 +593,7 @@ export async function estimateNutrition(ingredients) {
     for (const line of processed) {
       const { qty, unit, food } = parseIngredient(line);
       const foodName = food || extractFoodName(line);
-      if (line.toLowerCase().includes('chicken')) console.log('[USDA] Chicken line:', line, '-> qty:', qty, 'unit:', unit, 'food:', foodName);
+      if (line.toLowerCase().includes('chicken')) { if (__DEV__) console.log('[USDA] Chicken line:', line, '-> qty:', qty, 'unit:', unit, 'food:', foodName); }
       if (!foodName) { unmatched.push(line); continue; }
 
       // Skip open-ended lines without quantities: "Toppings: berries, nuts, honey"
@@ -609,7 +609,7 @@ export async function estimateNutrition(ingredients) {
       if (result) {
         const grams = await estimateGramsFromDb(qty, unit, foodName, result.fdc_id);
         const scale = grams / 100;
-        console.log('[USDA] Scale:', line, '->', foodName, 'qty='+qty, 'unit='+unit, 'grams='+Math.round(grams), 'scale='+scale.toFixed(2));
+        if (__DEV__) console.log('[USDA] Scale:', line, '->', foodName, 'qty='+qty, 'unit='+unit, 'grams='+Math.round(grams), 'scale='+scale.toFixed(2));
         matched.push({ input: line, food: result.description, grams: Math.round(grams), ...result });
         totals.calories += (result.calories || 0) * scale;
         totals.protein_g += (result.protein_g || 0) * scale;
@@ -636,7 +636,7 @@ export async function estimateNutrition(ingredients) {
 
     return { matched, unmatched, totals, processedCount: processed.length };
   } catch (e) {
-    console.warn('[USDA] Nutrition lookup failed:', e.message);
+    if (__DEV__) console.warn('[USDA] Nutrition lookup failed:', e.message);
     return null;
   }
 }
@@ -668,7 +668,7 @@ export async function getAllergens(fdcIds) {
         if (row.contains_shellfish) flags.contains_shellfish = true;
       }
     }
-  } catch (e) { console.error('[USDA] Allergen error:', e.message); }
+  } catch (e) { if (__DEV__) console.error('[USDA] Allergen error:', e.message); }
   return flags;
 }
 
