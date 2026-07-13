@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -174,6 +174,14 @@ export default function EditRecipeScreen({ route, navigation }) {
     setSaving(true);
     try {
       if (existing) {
+        // Invalidate stored structured nutrition when ingredients or servings change
+        const ingChanged = JSON.stringify(recipe.ingredients || []) !== JSON.stringify(existing.ingredients || []);
+        const servingsChanged = Number(recipe.servings) !== Number(existing.servings);
+        if (ingChanged || servingsChanged) {
+          recipe.nutrition_data = null;
+        } else if (existing.nutrition_data) {
+          recipe.nutrition_data = existing.nutrition_data;
+        }
         await api.updateRecipe(existing.id, recipe);
         invalidateRecipeAudits(existing.id);
         invalidateRecipeNutrition(existing.id);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
-import React, { useEffect, useState, useRef, Suspense } from 'react';
+// This file is part of Cegin — https://github.com/cmadzz/cegin
+import React, { useEffect, useState, useRef } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -10,7 +10,8 @@ import { View, ActivityIndicator, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 
-// Core screens — eager imports (frequently accessed)
+// Eager imports — React.lazy + Metro HMR is unreliable on native
+// (HMR tries window.location.reload when chunks load → crash)
 import RecipeListScreen from './src/screens/RecipeListScreen';
 import RecipeDetailScreen from './src/screens/RecipeDetailScreen';
 import EditRecipeScreen from './src/screens/EditRecipeScreen';
@@ -18,14 +19,12 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import CookModeScreen from './src/screens/CookModeScreen';
 import ShoppingListScreen from './src/screens/ShoppingListScreen';
 import SetupScreen from './src/screens/SetupScreen';
-
-// Heavy / less-frequently-used screens — lazy-loaded to reduce initial bundle
-const AssistantScreen = React.lazy(() => import('./src/screens/AssistantScreen'));
-const MealPlannerScreen = React.lazy(() => import('./src/screens/MealPlannerScreen'));
-const StatsScreen = React.lazy(() => import('./src/screens/StatsScreen'));
-const CookbookScreen = React.lazy(() => import('./src/screens/CookbookScreen'));
-const TerryVisionScreen = React.lazy(() => import('./src/screens/TerryVisionScreen'));
-const ScanRecipeScreen = React.lazy(() => import('./src/screens/ScanRecipeScreen'));
+import AssistantScreen from './src/screens/AssistantScreen';
+import MealPlannerScreen from './src/screens/MealPlannerScreen';
+import StatsScreen from './src/screens/StatsScreen';
+import CookbookScreen from './src/screens/CookbookScreen';
+import TerryVisionScreen from './src/screens/TerryVisionScreen';
+import ScanRecipeScreen from './src/screens/ScanRecipeScreen';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { RecipeGroup, MealPlanningGroup, CookingGroup, SettingsGroup } from './src/components/ScreenGroups';
 
@@ -75,11 +74,6 @@ function AppNavigator({ initialRoute }) {
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <View style={{ flex: 1 }}>
         <ErrorBoundary>
-        <Suspense fallback={
-          <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        }>
         <Stack.Navigator screenOptions={{
           headerShown: false,
           animation: 'fade',
@@ -107,7 +101,6 @@ function AppNavigator({ initialRoute }) {
           <Stack.Screen name="Setup" component={WrappedSetup} />
 
         </Stack.Navigator>
-        </Suspense>
         </ErrorBoundary>
         <GlobalTimerBar />
       </View>

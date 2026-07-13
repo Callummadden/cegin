@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Cegin Contributors
-# This file is part of Cegin — https://github.com/Callummadden/cegin
+# This file is part of Cegin — https://github.com/cmadzz/cegin
 #!/usr/bin/env python3
 """One-time setup: copies secrets from .env into ./secrets/ for Docker Compose."""
 import os, pathlib

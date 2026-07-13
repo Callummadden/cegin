@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 
 /**
  * Centralised configuration — all tuneable constants in one place.
@@ -36,8 +36,8 @@ module.exports = {
 
   // --- Client / Server Version Matrix ---
   MIN_CLIENT_VERSION: '1.1.5',
-  LATEST_CLIENT_VERSION: '1.3.2',
-  LATEST_SERVER_VERSION: '1.3.2',
+  LATEST_CLIENT_VERSION: '1.4.0',
+  LATEST_SERVER_VERSION: '1.4.0',
 
   // --- AI Service Timeouts ---
   AI_REQUEST_TIMEOUT: 30_000,              // text/vision model call

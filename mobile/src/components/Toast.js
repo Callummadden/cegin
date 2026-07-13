@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

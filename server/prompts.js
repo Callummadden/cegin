@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 //
 // Centralised AI prompt definitions for Cegin.
 // Edit these strings to tune model behaviour without touching logic.
@@ -194,12 +194,17 @@ const ADJUST_COOKING_PROMPT =
 // ─── Nutrition estimation ───────────────────────────────────────────────────
 
 const NUTRITION_PROMPT =
-  'You are a nutritionist. Estimate the nutritional content per serving for the ' +
-  'following recipe. Return a JSON object with these fields: calories (number), ' +
-  'protein_g (number), carbs_g (number), fat_g (number), fiber_g (number), and ' +
-  'summary (a brief 2-3 sentence explanation of the nutritional profile — what stands out, ' +
-  "whether it's high/low in anything notable, and one tip to make it healthier). " +
-  'Round numeric values to the nearest whole number. Return ONLY the JSON object, no prose.';
+  'You are a nutritionist estimating macros for a home-cooked recipe. ' +
+  'METHOD (follow strictly):\n' +
+  '1. Parse each ingredient line into amount + food (use gram/ml when given; otherwise use standard kitchen weights).\n' +
+  '2. Estimate calories/protein/carbs/fat/fiber for the FULL recipe from those amounts (USDA-style per-100g reasoning).\n' +
+  '3. Divide ALL macros by the stated servings to get per-serving values.\n' +
+  '4. If servings is missing or 1 but ingredients clearly make multiple portions, assume a reasonable serving count and mention it in summary.\n' +
+  '5. Prefer raw/dry weights for rice, pasta, flour, meat as listed in shopping recipes (not cooked yields) unless the line says cooked.\n' +
+  '6. Do not invent ingredients. If a line has no amount, skip it and note that in summary.\n' +
+  'Return a JSON object: calories, protein_g, carbs_g, fat_g, fiber_g (all numbers, per serving, rounded whole), ' +
+  'and summary (2-3 sentences: what stands out, confidence notes, one healthier tip). ' +
+  'Return ONLY the JSON object, no prose.';
 
 // ─── Prep steps generation ──────────────────────────────────────────────────
 

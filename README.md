@@ -6,12 +6,12 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Docker Image](https://img.shields.io/badge/docker-callum2254%2Fcegin-blue.svg?logo=docker)](https://hub.docker.com/r/callum2254/cegin)
-[![GitHub Release](https://img.shields.io/github/v/release/Callummadden/cegin)](https://github.com/Callummadden/cegin/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/cmadzz/cegin)](https://github.com/cmadzz/cegin/releases)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg?logo=node.js)](https://nodejs.org)
 [![Expo](https://img.shields.io/badge/Expo-SDK%2056-black.svg?logo=expo)](https://expo.dev)
-[![GitHub Stars](https://img.shields.io/github/stars/Callummadden/cegin?style=social)](https://github.com/Callummadden/cegin)
+[![GitHub Stars](https://img.shields.io/github/stars/cmadzz/cegin?style=social)](https://github.com/cmadzz/cegin)
 
-[cegin.kitchen](https://cegin.kitchen) · [Documentation](docs/API.md) · [Report a Bug](https://github.com/Callummadden/cegin/issues)
+[cegin.kitchen](https://cegin.kitchen) · [Documentation](docs/API.md) · [Report a Bug](https://github.com/cmadzz/cegin/issues)
 
 </div>
 

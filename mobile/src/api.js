@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   isOnline,
@@ -202,9 +202,12 @@ async function mirrorSingleRecipeToLocalDb(recipe) {
     if (!db) return;
     const r = recipe;
     const now = new Date().toISOString();
+    const nutritionData = r.nutrition_data == null
+      ? null
+      : (typeof r.nutrition_data === 'string' ? r.nutrition_data : JSON.stringify(r.nutrition_data));
     db.runSync(
-      `INSERT OR REPLACE INTO recipes (id, title, description, ingredients, steps, tags, prep_minutes, cook_minutes, servings, image_url, notes, collection, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO recipes (id, title, description, ingredients, steps, tags, prep_minutes, cook_minutes, servings, image_url, notes, collection, nutrition_data, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         r.id,
         r.title || '',
@@ -218,6 +221,7 @@ async function mirrorSingleRecipeToLocalDb(recipe) {
         r.image_url || '',
         r.notes || '',
         r.collection || '',
+        nutritionData,
         r.created_at || now,
         r.updated_at || now,
       ],

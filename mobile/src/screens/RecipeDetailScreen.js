@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -30,7 +31,15 @@ import { heroCardColors, hashStr } from '../utils/heroColors';
 import { addItems } from '../shoppingList';
 import { getDietaryProfiles } from '../dietProfiles';
 import { getCachedAudit, setCachedAudit, getCachedNutrition, setCachedNutrition, getCachedPrep, setCachedPrep } from '../auditCache';
-import { estimateNutrition as usdaEstimate, getAllergens } from '../usdaNutrition';
+import {
+  estimateNutrition as usdaEstimate,
+  recomputeNutrition,
+  applyFoodToLine,
+  applyAiMacrosToLine,
+  searchFoodOptions,
+  linkStructuredIngredients,
+  getAllergens,
+} from '../usdaNutrition';
 import { TextSkeleton } from '../components/Skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAi } from '../aiContext';
@@ -44,6 +53,324 @@ const UNIT_MODES = [
   { value: 'metric', label: 'G·ML' },
   { value: 'us', label: 'CUPS' },
 ];
+
+function parseAiGapJson(text) {
+  if (!text || typeof text !== 'string') return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    /* fall through */
+  }
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) {
+    try {
+      return JSON.parse(fence[1].trim());
+    } catch {
+      /* fall through */
+    }
+  }
+  const start = text.search(/[\[{]/);
+  if (start >= 0) {
+    try {
+      return JSON.parse(text.slice(start));
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+/** Breakdown amount label — liquids stay in ml/l (1ml stock ≈ 1g for macros). */
+function formatNutritionAmount(line) {
+  const u = (line.unit || '').toLowerCase();
+  const qty = line.qty != null ? Number(line.qty) : NaN;
+  if (u === 'ml' && Number.isFinite(qty) && qty > 0) return `${Math.round(qty)}ml`;
+  if (u === 'l' && Number.isFinite(qty) && qty > 0) return `${qty}l`;
+  if (u === 'cup' && Number.isFinite(qty) && qty > 0) return `${qty} cup${qty === 1 ? '' : 's'}`;
+  if (u === 'tbsp' && Number.isFinite(qty) && qty > 0) return `${qty} tbsp`;
+  if (u === 'tsp' && Number.isFinite(qty) && qty > 0) return `${qty} tsp`;
+  if (line.grams) return `${line.grams}g`;
+  return '';
+}
+
+/**
+ * PRIMARY PATH: AI structures cookbook English once → USDA does math.
+ * Heuristic free-text parsing is only a fallback if structure fails.
+ *
+ * include:false → toppings/condiments with no amount, section headers, optional "or" asides
+ * include:true  → base recipe with qty+unit+clean food name (pick first alternative only)
+ */
+async function structureIngredientsWithAi(recipe) {
+  const list = (recipe.ingredients || []).map((ing, i) => `${i + 1}. ${ing}`).join('\n');
+  const system =
+    'You normalize recipe ingredients for nutrition calculation. ' +
+    'Return ONLY JSON: {"items":[{' +
+    '"raw":"original line",' +
+    '"include":true|false,' +
+    '"qty":number|null,' +
+    '"unit":"g|ml|cup|tbsp|tsp|piece|null",' +
+    '"food":"simple USDA-searchable name",' +
+    '"grams":number|null,' +
+    '"role":"base|topping|optional|header",' +
+    '"reason":"why excluded if include false"' +
+    '}]} ' +
+    'Rules:\n' +
+    '1) One item per original line (keep order).\n' +
+    '2) include=false for: section headers, "options for topping", condiments/sauces/oils with NO amount, optional garnish without amount.\n' +
+    '3) include=true only when there is a usable amount (or clear produce count like 1 onion / 2 eggs / green onion garnish with estimate).\n' +
+    '4) Alternatives "chicken or beef stock" → pick FIRST option only (chicken stock). Drop page refs and cookbook asides.\n' +
+    '5) Prefer grams or ml. Dual "170g 3/4 cup" → use 170g. "6 cups (1.5 liters)" → 1500 ml.\n' +
+    '6) food names: short, plain English for USDA (e.g. "sushi rice", "chicken stock", "scallion"). Never "rice crackers".\n' +
+    '7) grams: estimate mass for included items when possible (ml liquids ≈ grams; dry sushi rice uses listed g).\n' +
+    '8) Do not invent large pours of soy sauce or chili oil without amounts — exclude those.';
+
+  const user =
+    `Recipe: ${recipe?.title || 'Untitled'}\n` +
+    `Servings (batch size, for context): ${recipe?.servings || 1}\n` +
+    `Ingredients:\n${list}`;
+
+  const reply = await api.aiChat([
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ]);
+  const text = typeof reply === 'string' ? reply : (reply?.reply || reply?.content || '');
+  const parsed = parseAiGapJson(text);
+  const items = Array.isArray(parsed?.items) ? parsed.items : null;
+  if (!items || items.length === 0) return null;
+  return items.map((it) => {
+    const qty = it.qty != null && it.qty !== '' ? Number(it.qty) : null;
+    const unit = (it.unit && it.unit !== 'null') ? String(it.unit) : '';
+    const hasAmount = (qty != null && qty > 0) || !!unit || (Number(it.grams) > 0);
+    let include = it.include === true || it.include === 'true';
+    if (it.include === false || it.include === 'false') include = false;
+    else if (it.include == null) include = hasAmount && it.role !== 'topping' && it.role !== 'header';
+    if (it.role === 'header' || it.role === 'optional') include = false;
+    if (it.role === 'topping' && !hasAmount) include = false;
+    return {
+      raw: it.raw || '',
+      include,
+      qty: qty != null && !Number.isNaN(qty) ? qty : null,
+      unit,
+      food: it.food || '',
+      grams: it.grams != null && Number(it.grams) > 0 ? Number(it.grams) : null,
+      role: it.role || 'base',
+      reason: it.reason || '',
+    };
+  });
+}
+
+/** AI macros only for structured lines that still lack a USDA match (must have amount). */
+async function aiFillNutritionGaps(lines, recipe) {
+  const gaps = lines.filter((l) => {
+    if (l.status !== 'unmatched') return false;
+    if (l.qty > 0 || (l.unit && l.unit.length > 0) || (l.grams > 0)) return true;
+    return /^\s*[\d½¼¾⅓⅔]/.test(l.raw || '');
+  });
+  if (gaps.length === 0) return lines;
+
+  const list = gaps.map((g, i) => `${i + 1}. ${g.cleaned || g.raw} (from: ${g.raw})`).join('\n');
+  const system =
+    'Estimate nutrition for these measured ingredients only. ' +
+    'FULL batch amounts (not per serving). Dry white/sushi rice ≈ 360 kcal/100g raw — never rice crackers. ' +
+    'Return ONLY JSON: {"items":[{"index":1,"grams":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"fiber_g":number}]}';
+
+  try {
+    const reply = await api.aiChat([
+      { role: 'system', content: system },
+      { role: 'user', content: `Recipe: ${recipe?.title || ''}\n${list}` },
+    ]);
+    const text = typeof reply === 'string' ? reply : (reply?.reply || reply?.content || '');
+    const parsed = parseAiGapJson(text);
+    const items = Array.isArray(parsed?.items) ? parsed.items : null;
+    if (!items?.length) return lines;
+
+    let gapIdx = 0;
+    return lines.map((l) => {
+      if (l.status !== 'unmatched') return l;
+      if (!(l.qty > 0 || l.unit || l.grams > 0 || /^\s*[\d½¼¾⅓⅔]/.test(l.raw || ''))) return l;
+      const item = items[gapIdx] || items.find((it) => Number(it.index) === gapIdx + 1);
+      gapIdx += 1;
+      if (!item) return l;
+      return applyAiMacrosToLine(
+        l,
+        {
+          calories: Number(item.calories) || 0,
+          protein_g: Number(item.protein_g) || 0,
+          carbs_g: Number(item.carbs_g) || 0,
+          fat_g: Number(item.fat_g) || 0,
+          fiber_g: Number(item.fiber_g) || 0,
+        },
+        Number(item.grams) > 0 ? Number(item.grams) : (l.grams || 50),
+      );
+    });
+  } catch (e) {
+    if (__DEV__) console.warn('[Nutrition] AI gap-fill failed:', e.message);
+    return lines;
+  }
+}
+
+/**
+ * Nutrition model (v1.4 structured path):
+ *  1) AI normalizes free-text ingredients → structured rows (include/exclude, qty, unit, food)
+ *  2) USDA FoodData lookup on clean names + grams
+ *  3) Optional AI only for measured rows still unmatched
+ *  4) Per serving = batch total ÷ recipe.servings
+ */
+async function computeNutritionEstimate(recipe) {
+  const recipeServings = Number(recipe.servings) > 0 ? Number(recipe.servings) : 0;
+
+  // --- Primary: structure-then-link ---
+  try {
+    const structured = await structureIngredientsWithAi(recipe);
+    if (structured?.length) {
+      const linked = await linkStructuredIngredients(structured);
+      if (linked?.lines?.length) {
+        let lines = linked.lines;
+        lines = await aiFillNutritionGaps(lines, recipe);
+        const result = recomputeNutrition(lines, recipeServings);
+        return {
+          ...result,
+          source: result.source === 'usda' ? 'structured+usda' : `structured+${result.source}`,
+          method: 'structured',
+        };
+      }
+    }
+  } catch (e) {
+    if (__DEV__) console.warn('[Nutrition] Structured path failed, falling back:', e.message);
+  }
+
+  // --- Fallback: legacy free-text USDA heuristic ---
+  const usda = await usdaEstimate(recipe.ingredients || []);
+  if (!usda || !usda.lines?.length) {
+    const batch = await api.estimateNutrition({
+      title: recipe.title,
+      ingredients: recipe.ingredients,
+      servings: 1,
+    });
+    const div = recipeServings >= 1 ? recipeServings : 1;
+    return {
+      calories: Math.round((batch.calories || 0) / div),
+      protein_g: Math.round((batch.protein_g || 0) / div),
+      carbs_g: Math.round((batch.carbs_g || 0) / div),
+      fat_g: Math.round((batch.fat_g || 0) / div),
+      fiber_g: Math.round((batch.fiber_g || 0) / div),
+      totals: {
+        calories: Math.round(batch.calories || 0),
+        protein_g: Math.round(batch.protein_g || 0),
+        carbs_g: Math.round(batch.carbs_g || 0),
+        fat_g: Math.round(batch.fat_g || 0),
+        fiber_g: Math.round(batch.fiber_g || 0),
+      },
+      source: 'ai',
+      method: 'ai-batch',
+      incomplete: true,
+      isFinal: false,
+      servingsUsed: div,
+      servingsMissing: recipeServings < 1,
+      lines: [],
+      confidence: 30,
+      confidenceLabel: 'Low',
+      summary: batch.summary || 'AI whole-recipe estimate.',
+    };
+  }
+
+  let lines = usda.lines.map((l) => ({ ...l }));
+  lines = await aiFillNutritionGaps(lines, recipe);
+  return { ...recomputeNutrition(lines, recipeServings), method: 'heuristic' };
+}
+
+/** Stable hash of ingredient list — change invalidates stored nutrition_data */
+function ingredientsFingerprint(ingredients) {
+  const raw = JSON.stringify(Array.isArray(ingredients) ? ingredients : []);
+  let h = 0;
+  for (let i = 0; i < raw.length; i++) {
+    h = ((h << 5) - h) + raw.charCodeAt(i);
+    h |= 0;
+  }
+  return `ing_${h}`;
+}
+
+/** Compact payload stored on the recipe — lines only, recompute per serving any time */
+function buildNutritionPayload(result, recipe) {
+  const lines = (result.lines || []).map((l) => ({
+    id: l.id,
+    raw: l.raw,
+    cleaned: l.cleaned,
+    status: l.status,
+    qty: l.qty,
+    unit: l.unit,
+    name: l.name,
+    fdc_id: l.fdc_id,
+    fdc_description: l.fdc_description,
+    grams: l.grams,
+    per100: l.per100,
+    calories: l.calories,
+    protein_g: l.protein_g,
+    carbs_g: l.carbs_g,
+    fat_g: l.fat_g,
+    fiber_g: l.fiber_g,
+  }));
+  return {
+    v: 1,
+    ingredients_fp: ingredientsFingerprint(recipe.ingredients),
+    servings: Number(recipe.servings) || 1,
+    lines,
+    method: result.method || 'structured',
+    source: result.source,
+    computed_at: new Date().toISOString(),
+  };
+}
+
+function resultFromStoredNutrition(nutritionData, recipeServings) {
+  if (!nutritionData?.lines?.length) return null;
+  const s = Number(recipeServings) > 0 ? Number(recipeServings) : Number(nutritionData.servings) || 1;
+  const result = recomputeNutrition(nutritionData.lines, s);
+  return {
+    ...result,
+    method: nutritionData.method || 'stored',
+    source: nutritionData.source || result.source,
+    fromStore: true,
+  };
+}
+
+/** Lines the estimate deliberately left out of the calorie total */
+function getSkippedNutritionLines(result) {
+  return (result?.lines || []).filter((l) => {
+    if (l.status === 'ignored') return true;
+    // Unmatched with no measurable amount — won't be AI-filled either
+    if (l.status === 'unmatched' && !(l.qty > 0 || (l.unit && l.unit.length) || (l.grams > 0))) return true;
+    return false;
+  });
+}
+
+function formatSkippedReason(line) {
+  const desc = (line.fdc_description || '').toLowerCase();
+  if (desc.includes('no amount') || desc.includes('not counted')) {
+    return 'no amount (g / ml / cups) given';
+  }
+  if (desc.includes('optional') || desc.includes('topping')) {
+    return 'optional topping / condiment without amount';
+  }
+  if (line.status === 'ignored' && line.fdc_description) {
+    return line.fdc_description.replace(/^not counted\s*[—–-]?\s*/i, '').trim() || 'excluded from estimate';
+  }
+  if (line.status === 'ignored') return 'excluded from estimate';
+  return 'could not be matched — add a clear amount';
+}
+
+function buildSkippedIngredientsMessage(skipped) {
+  const bullets = skipped.slice(0, 12).map((l) => {
+    const name = (l.cleaned || l.name || l.raw || 'Ingredient').trim();
+    const short = name.length > 60 ? `${name.slice(0, 57)}…` : name;
+    return `• ${short}\n  → ${formatSkippedReason(l)}`;
+  });
+  const more = skipped.length > 12 ? `\n\n…and ${skipped.length - 12} more` : '';
+  return (
+    `These items were left out of the nutrition total:\n\n${bullets.join('\n\n')}${more}\n\n` +
+    'To include them, edit the recipe and add amounts (e.g. 15ml soy sauce, 5g chili oil, 1 tbsp sesame oil). ' +
+    'Then re-estimate.'
+  );
+}
 
 
 
@@ -72,8 +399,87 @@ export default function RecipeDetailScreen({ route, navigation }) {
   const [servings, setServings] = useState(null);
   const [nutrition, setNutrition] = useState(null);
   const [loadingNutrition, setLoadingNutrition] = useState(false);
+  // Breakdown starts closed; user opens via toggle only
+  const [nutritionExpanded, setNutritionExpanded] = useState(false);
+  const [foodPicker, setFoodPicker] = useState(null);
   const [prepSteps, setPrepSteps] = useState(null);
   const [loadingPrep, setLoadingPrep] = useState(false);
+
+  const persistNutrition = useCallback((result, { saveToRecipe = false } = {}) => {
+    if (!recipe?.id || !result) return;
+    setNutrition(result);
+    setCachedNutrition(recipe.id, recipe.updated_at, result);
+    if (saveToRecipe && result.lines?.length) {
+      const payload = buildNutritionPayload(result, recipe);
+      // Fire-and-forget persist on recipe so next open is instant
+      api.updateRecipe(recipe.id, { nutrition_data: payload }).then((updated) => {
+        if (updated) setRecipe((prev) => (prev ? { ...prev, nutrition_data: payload, updated_at: updated.updated_at || prev.updated_at } : prev));
+      }).catch((e) => {
+        if (__DEV__) console.warn('[Nutrition] Failed to save nutrition_data:', e.message);
+      });
+    }
+  }, [recipe]);
+
+  const showSkippedIngredientsPopup = useCallback((result) => {
+    const skipped = getSkippedNutritionLines(result);
+    if (!skipped.length || !recipe) return;
+    setModal({
+      title: `${skipped.length} ingredient${skipped.length === 1 ? '' : 's'} not counted`,
+      message: buildSkippedIngredientsMessage(skipped),
+      buttons: [
+        {
+          text: 'Edit ingredients',
+          primary: true,
+          filled: true,
+          onPress: () => navigation.navigate('EditRecipe', { recipe }),
+        },
+        { text: 'Got it', primary: true },
+      ],
+    });
+  }, [recipe, navigation]);
+
+  const runNutritionEstimate = useCallback(async ({ force = false } = {}) => {
+    if (!recipe) return;
+    setLoadingNutrition(true);
+    try {
+      const fp = ingredientsFingerprint(recipe.ingredients);
+      const stored = recipe.nutrition_data;
+      // Instant path: stored lines for same ingredients — only re-divide by servings
+      if (!force && stored?.ingredients_fp === fp && stored?.lines?.length) {
+        const fromStore = resultFromStoredNutrition(stored, recipe.servings);
+        if (fromStore) {
+          persistNutrition(fromStore, { saveToRecipe: stored.servings !== Number(recipe.servings) });
+          setLoadingNutrition(false);
+          // Remind if stored estimate skipped items (once per estimate tap)
+          showSkippedIngredientsPopup(fromStore);
+          return;
+        }
+      }
+      const result = await computeNutritionEstimate(recipe);
+      persistNutrition(result, { saveToRecipe: true });
+      showSkippedIngredientsPopup(result);
+    } catch (e) {
+      if (__DEV__) console.warn('Nutrition estimation failed:', e.message);
+    }
+    setLoadingNutrition(false);
+  }, [recipe, persistNutrition, showSkippedIngredientsPopup]);
+
+  const updateNutritionLines = useCallback((nextLines) => {
+    if (!recipe) return;
+    const s = Number(recipe.servings) > 0 ? Number(recipe.servings) : 1;
+    const result = recomputeNutrition(nextLines, s);
+    persistNutrition({ ...result, method: nutrition?.method || 'structured' }, { saveToRecipe: true });
+  }, [recipe, persistNutrition, nutrition?.method]);
+
+  // If recipe.servings changes and we already have linked lines, re-divide only (same batch totals)
+  useEffect(() => {
+    if (!recipe || !nutrition?.lines?.length) return;
+    const s = Number(recipe.servings) > 0 ? Number(recipe.servings) : 0;
+    if (s < 1) return;
+    if (nutrition.servingsUsed === s) return;
+    const next = recomputeNutrition(nutrition.lines, s);
+    persistNutrition({ ...next, method: nutrition.method }, { saveToRecipe: true });
+  }, [recipe?.servings, recipe?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ingredient checklist
   const [checked, setChecked] = useState({});
@@ -110,12 +516,17 @@ export default function RecipeDetailScreen({ route, navigation }) {
         .then(async (r) => {
           setRecipe(r);
           setServings(r.servings);
-          // Load cached nutrition and prep steps if available
-          const [cachedNut, cachedPrep] = await Promise.all([
-            getCachedNutrition(id, r.updated_at),
-            getCachedPrep(id, r.updated_at),
-          ]);
-          if (cachedNut) setNutrition(cachedNut);
+          // Prefer nutrition stored on the recipe (structured once); else session cache
+          const fp = ingredientsFingerprint(r.ingredients);
+          const stored = r.nutrition_data;
+          if (stored?.ingredients_fp === fp && stored?.lines?.length) {
+            const fromStore = resultFromStoredNutrition(stored, r.servings);
+            if (fromStore) setNutrition(fromStore);
+          } else {
+            const cachedNut = await getCachedNutrition(id, r.updated_at);
+            if (cachedNut) setNutrition(cachedNut);
+          }
+          const cachedPrep = await getCachedPrep(id, r.updated_at);
           if (cachedPrep) setPrepSteps(cachedPrep);
           const favs = await getFavorites();
           setIsFav(!!favs[id]);
@@ -123,8 +534,11 @@ export default function RecipeDetailScreen({ route, navigation }) {
           try {
             const usdaResult = await usdaEstimate(r.ingredients);
             if (__DEV__) console.log('[Allergen] USDA matched:', usdaResult?.matched?.length || 0, 'ingredients');
-            if (usdaResult && usdaResult.matched.length > 0) {
-              const fdcIds = usdaResult.matched.map(m => m.fdc_id).filter(Boolean);
+            if (usdaResult && (usdaResult.matched?.length > 0 || usdaResult.lines?.length > 0)) {
+              const fdcIds = (usdaResult.matched?.length
+                ? usdaResult.matched.map(m => m.fdc_id)
+                : usdaResult.lines.map(l => l.fdc_id)
+              ).filter(Boolean);
               if (__DEV__) console.log('[Allergen] fdcIds:', fdcIds.length);
               if (fdcIds.length > 0) {
                 const flags = await getAllergens(fdcIds);
@@ -635,77 +1049,56 @@ export default function RecipeDetailScreen({ route, navigation }) {
               {!nutrition && !loadingNutrition && (
                 <Pressable
                   style={[styles.nutritionBtn, { borderColor: colors.primary }]}
-                  onPress={async () => {
-                    setLoadingNutrition(true);
-                    try {
-                      const s = recipe.servings || 1;
-                      const usda = await usdaEstimate(recipe.ingredients);
-                      let result;
-                      if (usda && usda.matched.length > 0) {
-                        result = {
-                          calories: Math.round(usda.totals.calories / s),
-                          protein_g: Math.round(usda.totals.protein_g / s),
-                          carbs_g: Math.round(usda.totals.carbs_g / s),
-                          fat_g: Math.round(usda.totals.fat_g / s),
-                          fiber_g: Math.round(usda.totals.fiber_g / s),
-                          source: 'usda',
-                          matched: usda.matched.length,
-                          total: usda.processedCount || recipe.ingredients.length,
-                        };
-                      } else {
-                        const r = await api.estimateNutrition({ title: recipe.title, ingredients: recipe.ingredients, servings: recipe.servings });
-                        result = { ...r, source: 'ai' };
-                      }
-                      setNutrition(result);
-                      setCachedNutrition(recipe.id, recipe.updated_at, result);
-                    } catch (e) { if (__DEV__) console.warn('Nutrition estimation failed:', e.message); }
-                    setLoadingNutrition(false);
-                  }}
+                  onPress={() => runNutritionEstimate()}
+                  disabled={!(recipe.servings > 0)}
                 >
-                  <Text style={[styles.nutritionBtnText, { color: colors.primary }]}>ESTIMATE</Text>
+                  <Text style={[styles.nutritionBtnText, { color: recipe.servings > 0 ? colors.primary : colors.textMuted }]}>
+                    ESTIMATE
+                  </Text>
                 </Pressable>
               )}
               {nutrition && !loadingNutrition && (
                 <Pressable
-                  onPress={async () => {
-                    setLoadingNutrition(true);
-                    try {
-                      const s = recipe.servings || 1;
-                      const usda = await usdaEstimate(recipe.ingredients);
-                      let result;
-                      if (usda && usda.matched.length > 0) {
-                        result = {
-                          calories: Math.round(usda.totals.calories / s),
-                          protein_g: Math.round(usda.totals.protein_g / s),
-                          carbs_g: Math.round(usda.totals.carbs_g / s),
-                          fat_g: Math.round(usda.totals.fat_g / s),
-                          fiber_g: Math.round(usda.totals.fiber_g / s),
-                          source: 'usda',
-                          matched: usda.matched.length,
-                          total: usda.processedCount || recipe.ingredients.length,
-                        };
-                      } else {
-                        const r = await api.estimateNutrition({ title: recipe.title, ingredients: recipe.ingredients, servings: recipe.servings });
-                        result = { ...r, source: 'ai' };
-                      }
-                      setNutrition(result);
-                      setCachedNutrition(recipe.id, recipe.updated_at, result);
-                    } catch (e) { if (__DEV__) console.warn('Nutrition estimation failed:', e.message); }
-                    setLoadingNutrition(false);
-                  }}
+                  onPress={() => runNutritionEstimate({ force: true })}
                   hitSlop={8}
                   style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center', marginTop: -8 }}
+                  accessibilityLabel="Re-estimate nutrition from scratch"
                 >
                   <Text style={{ fontSize: 14, color: colors.textMuted, lineHeight: 16, textAlign: 'center', includeFontPadding: false }}>↻</Text>
                 </Pressable>
               )}
             </View>
-            {loadingNutrition && (
-              <Text style={[styles.nutritionLoading, { color: colors.textMuted }]}>Calculating...</Text>
+
+            {!(recipe.servings > 0) && (
+              <Text style={[styles.nutritionSummary, { color: colors.primary, marginTop: 8 }]}>
+                Set servings on this recipe before estimating per-serving nutrition.
+              </Text>
             )}
-            {nutrition && (
+
+            {loadingNutrition && (
+              <Text style={[styles.nutritionLoading, { color: colors.textMuted }]}>
+                {nutrition?.fromStore ? 'Updating…' : 'Structuring ingredients → USDA…'}
+              </Text>
+            )}
+
+            {nutrition && !loadingNutrition && (
               <>
-                <View style={styles.nutritionGrid}>
+                <Text style={[styles.nutritionSummary, { color: colors.textMuted, fontSize: 10, marginTop: 4 }]}>
+                  {nutrition.fromStore
+                    ? `Saved estimate · ~${nutrition.servingSizeG || '—'}g / serving`
+                    : nutrition.isFinal
+                      ? `Confidence ${nutrition.confidenceLabel || 'High'}${nutrition.servingSizeG ? ` · ~${nutrition.servingSizeG}g / serving` : ''}`
+                      : nutrition.incomplete
+                        ? `Approximate · ${nutrition.contributing || nutrition.matched || 0}/${nutrition.total || '?'} ingredients linked`
+                        : `Confidence ${nutrition.confidenceLabel || 'Medium'}`}
+                </Text>
+                {nutrition.servingsSuspect ? (
+                  <Text style={[styles.nutritionSummary, { color: colors.primary, fontSize: 11, marginTop: 4 }]}>
+                    Recipe says {nutrition.servingsUsed || recipe.servings} serving(s) but the batch is ~{nutrition.totalGrams}g. If that should be more servings, edit the recipe servings field (not the display scaler below).
+                  </Text>
+                ) : null}
+
+                <View style={[styles.nutritionGrid, { opacity: nutrition.isFinal ? 1 : 0.85 }]}>
                   {[
                     { label: 'CAL', value: nutrition.calories, unit: '' },
                     { label: 'PROTEIN', value: nutrition.protein_g, unit: 'g' },
@@ -714,24 +1107,266 @@ export default function RecipeDetailScreen({ route, navigation }) {
                     { label: 'FIBER', value: nutrition.fiber_g, unit: 'g' },
                   ].map((n) => (
                     <View key={n.label} style={styles.nutritionItem}>
-                      <Text style={[styles.nutritionValue, { fontFamily: MONO, color: colors.primary }]}>{n.value}{n.unit}</Text>
+                      <Text style={[styles.nutritionValue, { fontFamily: MONO, color: colors.primary }]}>{n.value ?? '—'}{n.unit}</Text>
                       <Text style={[styles.nutritionLabel, { fontFamily: MONO, color: colors.textMuted }]}>{n.label}</Text>
                     </View>
                   ))}
                 </View>
+
                 {nutrition.summary ? (
                   <Text style={[styles.nutritionSummary, { color: colors.text2 }]}>{nutrition.summary}</Text>
                 ) : null}
+
                 <Text style={[styles.nutritionSummary, { color: colors.textMuted, fontSize: 10, marginTop: 6 }]}>
-                  {nutrition.source === 'usda'
-                    ? `📊 USDA Foundation Foods — ${nutrition.matched}/${nutrition.total} ingredients matched`
-                    : '🤖 AI estimated — values are approximate'}
+                  Full batch ÷ {nutrition.servingsUsed || recipe.servings || 1} recipe serving{(nutrition.servingsUsed || recipe.servings) === 1 ? '' : 's'}
+                  {nutrition.totals?.calories != null ? ` · batch ~${nutrition.totals.calories} kcal` : ''}
+                  {nutrition.fromStore
+                    ? ' · stored on recipe'
+                    : nutrition.method === 'structured'
+                      ? ' · AI structure + USDA'
+                      : nutrition.source ? ` · ${nutrition.source}` : ''}
                 </Text>
+                {servings != null && recipe.servings > 0 && servings !== recipe.servings ? (
+                  <Text style={[styles.nutritionSummary, { color: colors.textMuted, fontSize: 10, marginTop: 4 }]}>
+                    Display scaler is {servings} (from {recipe.servings}) — scales ingredients only, not per-serving nutrition.
+                  </Text>
+                ) : null}
+
+                {/* Closed by default — expand only when user taps */}
+                {nutrition.lines?.length > 0 && (
+                  <Pressable
+                    onPress={() => setNutritionExpanded((v) => !v)}
+                    style={{ marginTop: 12 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Toggle ingredient nutrition breakdown"
+                  >
+                    <Text style={[styles.nutritionBtnText, { color: colors.primary }]}>
+                      {nutritionExpanded ? '▾ HIDE BREAKDOWN' : '▸ INGREDIENT BREAKDOWN'}
+                    </Text>
+                  </Pressable>
+                )}
+
+                {nutritionExpanded && nutrition.lines?.length > 0 && (
+                  <View style={{ marginTop: 10, gap: 8 }}>
+                    {nutrition.lines.map((line) => {
+                      const statusColor =
+                        line.status === 'unmatched' ? colors.danger
+                          : line.status === 'ai' ? colors.primary
+                            : line.status === 'ignored' ? colors.textMuted
+                              : colors.success;
+                      return (
+                        <View
+                          key={line.id}
+                          style={{
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            borderRadius: s(10),
+                            padding: s(10),
+                            opacity: line.status === 'ignored' ? 0.5 : 1,
+                          }}
+                        >
+                          <Text style={{ color: colors.text, fontSize: fs(13), fontWeight: '600' }} numberOfLines={2}>
+                            {line.raw}
+                          </Text>
+                          {line.cleaned && line.cleaned !== line.raw ? (
+                            <Text style={{ color: colors.textMuted, fontSize: fs(11), marginTop: 2 }} numberOfLines={2}>
+                              counted as: {line.cleaned}
+                            </Text>
+                          ) : null}
+                          <Text style={{ color: statusColor, fontFamily: MONO, fontSize: fs(10), marginTop: 3 }}>
+                            {line.status === 'ignored' ? 'SKIPPED' : line.status.toUpperCase()}
+                            {line.status !== 'ignored' && formatNutritionAmount(line) ? ` · ${formatNutritionAmount(line)}` : ''}
+                            {line.calories != null && line.status !== 'unmatched' && line.status !== 'ignored'
+                              ? ` · ${line.calories} kcal`
+                              : ''}
+                          </Text>
+                          {line.fdc_description ? (
+                            <Text style={{ color: colors.textMuted, fontSize: fs(11), marginTop: 2 }} numberOfLines={2}>
+                              → {line.fdc_description}
+                            </Text>
+                          ) : null}
+
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                            {line.status !== 'ignored' && (
+                              <Pressable
+                                onPress={async () => {
+                                  const query = line.name || line.raw;
+                                  setFoodPicker({
+                                    lineId: line.id,
+                                    query,
+                                    results: [],
+                                    grams: String(line.grams || 100),
+                                    loading: true,
+                                  });
+                                  const results = await searchFoodOptions(query, line.unit || '', 10);
+                                  setFoodPicker((p) => (p ? { ...p, results, loading: false } : null));
+                                }}
+                              >
+                                <Text style={{ color: colors.primary, fontSize: fs(11), fontWeight: '700' }}>
+                                  {line.status === 'unmatched' ? 'LINK FOOD' : 'CHANGE'}
+                                </Text>
+                              </Pressable>
+                            )}
+                            {line.status !== 'ignored' && line.status !== 'unmatched' && (
+                              <Pressable
+                                onPress={() => {
+                                  setFoodPicker({
+                                    lineId: line.id,
+                                    query: line.name || line.raw,
+                                    results: [],
+                                    grams: String(line.grams || 100),
+                                    loading: false,
+                                    gramsOnly: true,
+                                  });
+                                }}
+                              >
+                                <Text style={{ color: colors.primary, fontSize: fs(11), fontWeight: '700' }}>GRAMS</Text>
+                              </Pressable>
+                            )}
+                            <Pressable
+                              onPress={() => {
+                                const next = nutrition.lines.map((l) =>
+                                  l.id === line.id
+                                    ? { ...l, status: l.status === 'ignored' ? (l.fdc_id ? 'user' : 'unmatched') : 'ignored' }
+                                    : l
+                                );
+                                updateNutritionLines(next);
+                              }}
+                            >
+                              <Text style={{ color: colors.textMuted, fontSize: fs(11), fontWeight: '700' }}>
+                                {line.status === 'ignored' ? 'RESTORE' : 'IGNORE'}
+                              </Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </>
             )}
           </View>
           )}
           {nutrition && <AiDisclaimer />}
+
+          <Modal visible={!!foodPicker} transparent animationType="fade" onRequestClose={() => setFoodPicker(null)}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+              <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={() => setFoodPicker(null)}>
+                <Pressable
+                  onPress={(e) => e.stopPropagation?.()}
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderTopLeftRadius: 16,
+                    borderTopRightRadius: 16,
+                    padding: 16,
+                    paddingBottom: Math.max(insets.bottom, 16),
+                    maxHeight: '80%',
+                  }}
+                >
+                  {foodPicker && (
+                    <>
+                      <Text style={{ color: colors.text, fontWeight: '800', fontSize: fs(16), marginBottom: 8 }}>
+                        {foodPicker.gramsOnly ? 'Edit grams' : 'Link USDA food'}
+                      </Text>
+                      {!foodPicker.gramsOnly && (
+                        <>
+                          <TextInput
+                            value={foodPicker.query}
+                            onChangeText={(t) => setFoodPicker((p) => ({ ...p, query: t }))}
+                            placeholder="Search food…"
+                            placeholderTextColor={colors.textMuted}
+                            style={{
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                              borderRadius: 10,
+                              padding: 12,
+                              color: colors.text,
+                              marginBottom: 8,
+                            }}
+                            autoFocus
+                          />
+                          <Pressable
+                            style={[styles.nutritionBtn, { borderColor: colors.primary, alignSelf: 'flex-start', marginBottom: 10 }]}
+                            onPress={async () => {
+                              setFoodPicker((p) => ({ ...p, loading: true }));
+                              const results = await searchFoodOptions(foodPicker.query, '', 10);
+                              setFoodPicker((p) => ({ ...p, results, loading: false }));
+                            }}
+                          >
+                            <Text style={[styles.nutritionBtnText, { color: colors.primary }]}>
+                              {foodPicker.loading ? 'SEARCHING…' : 'SEARCH'}
+                            </Text>
+                          </Pressable>
+                          <ScrollView style={{ maxHeight: 220 }}>
+                            {(foodPicker.results || []).map((r) => (
+                              <Pressable
+                                key={r.fdc_id}
+                                onPress={() => {
+                                  const grams = parseFloat(foodPicker.grams) || 100;
+                                  const next = nutrition.lines.map((l) =>
+                                    l.id === foodPicker.lineId ? applyFoodToLine(l, r, grams) : l
+                                  );
+                                  updateNutritionLines(next);
+                                  setFoodPicker(null);
+                                }}
+                                style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}
+                              >
+                                <Text style={{ color: colors.text, fontSize: fs(13) }}>{r.description}</Text>
+                                <Text style={{ color: colors.textMuted, fontFamily: MONO, fontSize: fs(10), marginTop: 2 }}>
+                                  {Math.round(r.calories || 0)} kcal / 100g · P{Math.round(r.protein_g || 0)} C{Math.round(r.carbs_g || 0)} F{Math.round(r.fat_g || 0)}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </ScrollView>
+                        </>
+                      )}
+                      <Text style={{ color: colors.textMuted, fontSize: fs(11), marginTop: 8, marginBottom: 4 }}>Grams</Text>
+                      <TextInput
+                        value={foodPicker.grams}
+                        onChangeText={(t) => setFoodPicker((p) => ({ ...p, grams: t.replace(/[^0-9.]/g, '') }))}
+                        keyboardType="decimal-pad"
+                        style={{
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          borderRadius: 10,
+                          padding: 12,
+                          color: colors.text,
+                          marginBottom: 12,
+                          fontFamily: MONO,
+                        }}
+                      />
+                      {foodPicker.gramsOnly && (
+                        <Pressable
+                          style={[styles.nutritionBtn, { borderColor: colors.primary, alignSelf: 'flex-start' }]}
+                          onPress={() => {
+                            const grams = parseFloat(foodPicker.grams) || 0;
+                            const next = nutrition.lines.map((l) => {
+                              if (l.id !== foodPicker.lineId) return l;
+                              if (l.per100 && (l.fdc_id || l.status === 'ai' || l.status === 'user' || l.status === 'matched')) {
+                                return applyFoodToLine(l, {
+                                  fdc_id: l.fdc_id,
+                                  description: l.fdc_description,
+                                  ...l.per100,
+                                }, grams);
+                              }
+                              return { ...l, grams: Math.round(grams) };
+                            });
+                            updateNutritionLines(next);
+                            setFoodPicker(null);
+                          }}
+                        >
+                          <Text style={[styles.nutritionBtnText, { color: colors.primary }]}>SAVE GRAMS</Text>
+                        </Pressable>
+                      )}
+                      <Pressable onPress={() => setFoodPicker(null)} style={{ marginTop: 12 }}>
+                        <Text style={{ color: colors.textMuted, textAlign: 'center' }}>Cancel</Text>
+                      </Pressable>
+                    </>
+                  )}
+                </Pressable>
+              </Pressable>
+            </KeyboardAvoidingView>
+          </Modal>
 
 
           {/* Serving adjuster — near ingredients */}

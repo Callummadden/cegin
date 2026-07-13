@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 import { getCustomAIConfig, getDeepSeekKey, getGoogleKey } from './config';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -384,9 +384,22 @@ export async function adjustCooking(params) {
 }
 
 export async function estimateNutrition(params) {
+  const system =
+    'You are a nutritionist. Estimate per-serving macros for a home recipe. ' +
+    'Sum full-recipe nutrition from each ingredient amount (prefer dry/raw weights for rice/pasta/flour/meat), ' +
+    'then divide by servings. If servings is 1 but the batch is clearly larger, note that in summary. ' +
+    'Return ONLY JSON: { "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "fiber_g": number, "summary": string }. ' +
+    'Round numbers to whole values.';
+  const user =
+    `Recipe: ${params?.title || 'Untitled'}\n` +
+    `Servings: ${params?.servings || 1}\n` +
+    `Ingredients:\n- ${Array.isArray(params?.ingredients) ? params.ingredients.join('\n- ') : String(params?.ingredients || '')}`;
   const content = await callTextModel(
-    [{ role: 'user', content: JSON.stringify(params) }],
-    { json: true }
+    [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    { json: true, temperature: 0 }
   );
   return extractJson(content);
 }

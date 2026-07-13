@@ -46,10 +46,10 @@ Check server status and version info. No auth required.
 ```json
 {
   "ok": true,
-  "serverVersion": "1.3.2",
-  "latestServerVersion": "1.3.2",
+  "serverVersion": "1.4.0",
+  "latestServerVersion": "1.4.0",
   "minClientVersion": "1.1.5",
-  "latestClientVersion": "1.3.2"
+  "latestClientVersion": "1.4.0"
 }
 ```
 

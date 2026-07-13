@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 const Database = require('better-sqlite3');
 const path = require('path');
 
@@ -60,18 +60,43 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_shopping_list_user_id ON shopping_list(user_id);
 `);
 
+// Persist structured nutrition on the recipe (v1.4+) — estimate once, recompute offline
+for (const stmt of [
+  `ALTER TABLE recipes ADD COLUMN nutrition_data TEXT DEFAULT NULL`,
+]) {
+  try {
+    db.exec(stmt);
+  } catch (e) {
+    if (!/duplicate column/i.test(e.message)) {
+      console.error('Migration error:', e.message);
+    }
+  }
+}
+
 // ingredients/steps/tags are stored as JSON strings; parse on the way out
 function rowToRecipe(row) {
   if (!row) return null;
-  let ingredients, steps, tags;
+  let ingredients, steps, tags, nutrition_data;
   try { ingredients = JSON.parse(row.ingredients); } catch { ingredients = []; }
   try { steps = JSON.parse(row.steps); } catch { steps = []; }
   try { tags = JSON.parse(row.tags); } catch { tags = []; }
+  if (row.nutrition_data) {
+    try {
+      nutrition_data = typeof row.nutrition_data === 'string'
+        ? JSON.parse(row.nutrition_data)
+        : row.nutrition_data;
+    } catch {
+      nutrition_data = null;
+    }
+  } else {
+    nutrition_data = null;
+  }
   return {
     ...row,
     ingredients,
     steps,
     tags,
+    nutrition_data,
   };
 }
 
@@ -79,6 +104,7 @@ function rowToRecipe(row) {
 const RECIPE_ALLOWED_FIELDS = new Set([
   'title', 'description', 'ingredients', 'steps', 'tags',
   'prep_minutes', 'cook_minutes', 'servings', 'image_url', 'notes', 'collection',
+  'nutrition_data',
 ]);
 
 // S2-7: listRecipes scoped by userId
@@ -112,11 +138,21 @@ function getRecipe(id, userId) {
   return rowToRecipe(db.prepare('SELECT * FROM recipes WHERE id = @id').get({ id }));
 }
 
+function serializeNutritionData(nd) {
+  if (nd === null || nd === undefined) return null;
+  if (typeof nd === 'string') return nd;
+  try {
+    return JSON.stringify(nd);
+  } catch {
+    return null;
+  }
+}
+
 function createRecipe(r, userId) { // S2-7: accept userId
   const result = db
     .prepare(
-      `INSERT INTO recipes (title, description, ingredients, steps, tags, prep_minutes, cook_minutes, servings, image_url, notes, collection, user_id)
-       VALUES (@title, @description, @ingredients, @steps, @tags, @prep_minutes, @cook_minutes, @servings, @image_url, @notes, @collection, @user_id)`
+      `INSERT INTO recipes (title, description, ingredients, steps, tags, prep_minutes, cook_minutes, servings, image_url, notes, collection, nutrition_data, user_id)
+       VALUES (@title, @description, @ingredients, @steps, @tags, @prep_minutes, @cook_minutes, @servings, @image_url, @notes, @collection, @nutrition_data, @user_id)`
     )
     .run({
       title: r.title,
@@ -130,6 +166,7 @@ function createRecipe(r, userId) { // S2-7: accept userId
       image_url: r.image_url ?? '',
       notes: r.notes ?? '',
       collection: r.collection ?? '',
+      nutrition_data: serializeNutritionData(r.nutrition_data),
       user_id: userId || 0, // S2-7
     });
   return getRecipe(result.lastInsertRowid, userId);
@@ -150,6 +187,10 @@ function updateRecipe(id, r, userId) {
   if (!Array.isArray(merged.ingredients)) merged.ingredients = [];
   if (!Array.isArray(merged.steps)) merged.steps = [];
   if (!Array.isArray(merged.tags)) merged.tags = [];
+  // Allow explicit clear: nutrition_data: null
+  const nutritionData = Object.prototype.hasOwnProperty.call(safe, 'nutrition_data')
+    ? safe.nutrition_data
+    : existing.nutrition_data;
   db.prepare(
     `UPDATE recipes SET
        title = @title, description = @description, ingredients = @ingredients,
@@ -157,6 +198,7 @@ function updateRecipe(id, r, userId) {
        cook_minutes = @cook_minutes, servings = @servings,
        image_url = @image_url,
        notes = @notes, collection = @collection,
+       nutrition_data = @nutrition_data,
        updated_at = datetime('now')
      WHERE id = @id AND user_id = @userId`
   ).run({
@@ -173,6 +215,7 @@ function updateRecipe(id, r, userId) {
     image_url: merged.image_url ?? '',
     notes: merged.notes ?? '',
     collection: merged.collection ?? '',
+    nutrition_data: serializeNutritionData(nutritionData),
   });
   return getRecipe(id, userId);
 }

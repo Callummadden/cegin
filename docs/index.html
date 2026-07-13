@@ -43,7 +43,7 @@
         <a href="#faq">FAQ</a>
         <a href="#download">Download</a>
         <a href="#customize">Themes</a>
-        <a href="https://github.com/Callummadden/cegin" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/cmadzz/cegin" target="_blank" rel="noopener noreferrer">GitHub</a>
         <a href="https://buymeacoffee.com/callummadden" target="_blank" rel="noopener noreferrer">☕ Tip</a>
         <button type="button" class="theme-trigger" data-theme-open aria-label="Change theme">
           <span class="theme-trigger-dot"></span>
@@ -59,7 +59,7 @@
       <div class="hero-content">
         <div class="hero-badge mono">
           <span>●</span> Self-hosted · Offline-first · GPL-3.0
-          <span class="version-badge">v1.3.2</span>
+          <span class="version-badge">v1.4.0</span>
         </div>
         <p class="hero-tagline">your kitchen, organised</p>
         <h1>Cook smarter.<br>Own your recipes.</h1>
@@ -70,7 +70,7 @@
         </p>
         <div class="hero-actions">
           <a href="#download" class="btn btn-primary">Get the app</a>
-          <a href="https://github.com/Callummadden/cegin/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Download APK</a>
+          <a href="https://github.com/cmadzz/cegin/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Download APK</a>
           <a href="https://hub.docker.com/r/callum2254/cegin" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Docker Hub</a>
         </div>
         <div class="hero-stats">
@@ -837,7 +837,7 @@
           <div class="step-num">01</div>
           <h3>Start the server</h3>
           <p>Pull from Docker Hub, add your API keys, and launch on your LAN machine.</p>
-          <div class="code-block">git clone https://github.com/Callummadden/cegin.git
+          <div class="code-block">git clone https://github.com/cmadzz/cegin.git
 cd cegin/server
 cp .env.example .env
 mkdir -p secrets && chmod 700 secrets
@@ -850,7 +850,7 @@ docker compose up -d</div>
           <div class="step-num">02</div>
           <h3>Install the app</h3>
           <p>Download the APK from GitHub Releases and install on your Android phone. Push notifications require the APK — not Expo Go.</p>
-          <a href="https://github.com/Callummadden/cegin/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Get APK v1.3.2</a>
+          <a href="https://github.com/cmadzz/cegin/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Get APK v1.4.0</a>
         </article>
         <article class="step-card">
           <div class="step-num">03</div>
@@ -944,6 +944,22 @@ docker compose up -d</div>
       <div class="changelog-grid">
         <article class="changelog-card">
           <div class="changelog-header">
+            <h3>v1.4.0</h3>
+            <span class="changelog-status released">Released</span>
+          </div>
+          <p class="changelog-date mono">July 13, 2026</p>
+          <ul>
+            <li>Nutrition: AI structure → USDA → store on recipe (offline recompute)</li>
+            <li>Breakdown UI (collapsed by default); popup when items are skipped</li>
+            <li>Servings = full batch ÷ recipe servings; no ghost no-amount toppings</li>
+            <li>Cookbook fixes: alternatives, dual units, headers, rice/oil matching</li>
+            <li>Docs: NUTRITION_SOLUTIONS.md (problem space & future options)</li>
+          </ul>
+          <a href="https://github.com/cmadzz/cegin/releases/tag/v1.4.0" target="_blank" rel="noopener noreferrer">GitHub →</a>
+          <a href="versions/v1.4.0.md" style="margin-left: 12px;">Release notes →</a>
+        </article>
+        <article class="changelog-card">
+          <div class="changelog-header">
             <h3>v1.3.2</h3>
             <span class="changelog-status released">Released</span>
           </div>
@@ -959,7 +975,7 @@ docker compose up -d</div>
             <li>Release: full process with git tag v1.3.2, commits, and direct APK</li>
           </ul>
           <a href="Cegin-v1.3.2.apk">Download APK (v1.3.2)</a>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.3.2" target="_blank" rel="noopener noreferrer" style="margin-left: 12px;">GitHub →</a>
+          <a href="https://github.com/cmadzz/cegin/releases/tag/v1.3.2" target="_blank" rel="noopener noreferrer" style="margin-left: 12px;">GitHub →</a>
         </article>
         <article class="changelog-card">
           <div class="changelog-header">
@@ -977,7 +993,7 @@ docker compose up -d</div>
             <li>Fixed crash on app reset, recipe update field ignoring, and FTS5 search syntax errors</li>
             <li>Performance: in-memory caches for favorites and chat, memoized timer context</li>
           </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.3.0" target="_blank" rel="noopener noreferrer">Download v1.3.0 →</a>
+          <a href="https://github.com/cmadzz/cegin/releases/tag/v1.3.0" target="_blank" rel="noopener noreferrer">Download v1.3.0 →</a>
         </article>
         <article class="changelog-card">
           <div class="changelog-header">
@@ -991,7 +1007,7 @@ docker compose up -d</div>
             <li>Alarm stops immediately on DISMISS</li>
             <li>Exact scheduling via setAlarmClock()</li>
           </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.2.4" target="_blank" rel="noopener noreferrer">Download v1.2.4 →</a>
+          <a href="https://github.com/cmadzz/cegin/releases/tag/v1.2.4" target="_blank" rel="noopener noreferrer">Download v1.2.4 →</a>
         </article>
         <article class="changelog-card">
           <div class="changelog-header">
@@ -1005,7 +1021,7 @@ docker compose up -d</div>
             <li>Global timer bar on every screen — tap to jump back to cook step</li>
             <li>Instant recipe delete with undo toast</li>
           </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.2.3" target="_blank" rel="noopener noreferrer">Download v1.2.3 →</a>
+          <a href="https://github.com/cmadzz/cegin/releases/tag/v1.2.3" target="_blank" rel="noopener noreferrer">Download v1.2.3 →</a>
         </article>
         <article class="changelog-card">
           <div class="changelog-header">
@@ -1022,7 +1038,7 @@ docker compose up -d</div>
             <li>Fixed camera crash (ActivityResultLauncher) on Android</li>
             <li>Renamed "Scan Photo" to "Scan Recipe"</li>
           </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.2.2" target="_blank" rel="noopener noreferrer">Download v1.2.2 →</a>
+          <a href="https://github.com/cmadzz/cegin/releases/tag/v1.2.2" target="_blank" rel="noopener noreferrer">Download v1.2.2 →</a>
         </article>
         <article class="changelog-card">
           <div class="changelog-header">
@@ -1036,11 +1052,11 @@ docker compose up -d</div>
             <li>Fixed cookbook duplication bug</li>
             <li>Fixed scan recipe crash on startup</li>
           </ul>
-          <a href="https://github.com/Callummadden/cegin/releases/tag/v1.2.1" target="_blank" rel="noopener noreferrer">Download v1.2.1 →</a>
+          <a href="https://github.com/cmadzz/cegin/releases/tag/v1.2.1" target="_blank" rel="noopener noreferrer">Download v1.2.1 →</a>
         </article>
       </div>
       <div style="text-align: center; margin-top: 24px;">
-        <a href="https://github.com/Callummadden/cegin/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View all releases</a>
+        <a href="https://github.com/cmadzz/cegin/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View all releases</a>
       </div>
     </div>
   </section>
@@ -1100,16 +1116,16 @@ docker compose up -d</div>
             and start cooking. Or skip the server entirely and run in local mode with your own API keys.
             Docker image available on Docker Hub.
           </p>
-          <div class="code-block">git clone https://github.com/Callummadden/cegin && cd cegin/server && docker compose up -d</div>
+          <div class="code-block">git clone https://github.com/cmadzz/cegin && cd cegin/server && docker compose up -d</div>
         </div>
         <div class="download-actions">
-          <a href="https://github.com/Callummadden/cegin/releases" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+          <a href="https://github.com/cmadzz/cegin/releases" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
             Download APK
           </a>
           <a href="https://hub.docker.com/r/callum2254/cegin" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
             Docker Hub
           </a>
-          <a href="https://github.com/Callummadden/cegin" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+          <a href="https://github.com/cmadzz/cegin" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
             GitHub repo
           </a>
         </div>
@@ -1127,10 +1143,10 @@ docker compose up -d</div>
       <div class="footer-links">
         <a href="#faq">FAQ</a>
         <a href="privacy.html">Privacy</a>
-        <a href="https://github.com/Callummadden/cegin" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/cmadzz/cegin" target="_blank" rel="noopener noreferrer">GitHub</a>
         <a href="https://buymeacoffee.com/callummadden" target="_blank" rel="noopener noreferrer">☕ Tip Terry's bowl</a>
         <a href="https://www.cegin.kitchen" target="_blank" rel="noopener noreferrer">cegin.kitchen</a>
-        <a href="https://github.com/Callummadden/cegin/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GPL-3.0 License</a>
+        <a href="https://github.com/cmadzz/cegin/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GPL-3.0 License</a>
       </div>
       <p class="footer-copy">Enjoy cooking with Terry. 🐱</p>
     </div>

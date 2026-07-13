@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Cegin Contributors
-// This file is part of Cegin — https://github.com/Callummadden/cegin
+// This file is part of Cegin — https://github.com/cmadzz/cegin
 import * as SQLite from 'expo-sqlite';
 
 let _db = null;
@@ -22,6 +22,7 @@ export function getDb() {
         image_url TEXT DEFAULT '',
         notes TEXT DEFAULT '',
         collection TEXT DEFAULT '',
+        nutrition_data TEXT DEFAULT NULL,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );
@@ -42,6 +43,10 @@ export function getDb() {
         created_at TEXT DEFAULT (datetime('now'))
       );
     `);
+    // Migrate older local DBs
+    try {
+      _db.execSync(`ALTER TABLE recipes ADD COLUMN nutrition_data TEXT DEFAULT NULL`);
+    } catch (_e) { /* column exists */ }
   }
   return _db;
 }
@@ -56,6 +61,9 @@ function parseJsonFields(row) {
       try { out[key] = JSON.parse(out[key]); } catch { out[key] = []; }
     }
   }
+  if (out.nutrition_data && typeof out.nutrition_data === 'string') {
+    try { out.nutrition_data = JSON.parse(out.nutrition_data); } catch { out.nutrition_data = null; }
+  }
   return out;
 }
 
@@ -66,6 +74,10 @@ function stringifyJsonFields(recipe) {
       out[key] = JSON.stringify(out[key]);
     }
   }
+  if (out.nutrition_data !== undefined && out.nutrition_data !== null && typeof out.nutrition_data !== 'string') {
+    out.nutrition_data = JSON.stringify(out.nutrition_data);
+  }
+  if (out.nutrition_data === undefined) out.nutrition_data = null;
   return out;
 }
 
@@ -98,8 +110,8 @@ export async function createRecipe(recipe) {
   const r = stringifyJsonFields(recipe);
   const now = new Date().toISOString();
   const result = db.runSync(
-    `INSERT INTO recipes (title, description, ingredients, steps, tags, prep_minutes, cook_minutes, servings, image_url, notes, collection, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO recipes (title, description, ingredients, steps, tags, prep_minutes, cook_minutes, servings, image_url, notes, collection, nutrition_data, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       r.title || '',
       r.description || '',
@@ -112,6 +124,7 @@ export async function createRecipe(recipe) {
       r.image_url || '',
       r.notes || '',
       r.collection || '',
+      r.nutrition_data ?? null,
       now,
       now,
     ],
@@ -121,10 +134,16 @@ export async function createRecipe(recipe) {
 
 export async function updateRecipe(id, recipe) {
   const db = getDb();
-  const r = stringifyJsonFields(recipe);
+  const existing = await getRecipe(id);
+  const merged = { ...existing, ...recipe };
+  const r = stringifyJsonFields(merged);
   const now = new Date().toISOString();
+  // Explicit null clears nutrition_data
+  const nutritionVal = Object.prototype.hasOwnProperty.call(recipe, 'nutrition_data')
+    ? (recipe.nutrition_data === null ? null : r.nutrition_data)
+    : r.nutrition_data;
   db.runSync(
-    `UPDATE recipes SET title=?, description=?, ingredients=?, steps=?, tags=?, prep_minutes=?, cook_minutes=?, servings=?, image_url=?, notes=?, collection=?, updated_at=? WHERE id=?`,
+    `UPDATE recipes SET title=?, description=?, ingredients=?, steps=?, tags=?, prep_minutes=?, cook_minutes=?, servings=?, image_url=?, notes=?, collection=?, nutrition_data=?, updated_at=? WHERE id=?`,
     [
       r.title ?? '',
       r.description ?? '',
@@ -137,6 +156,7 @@ export async function updateRecipe(id, recipe) {
       r.image_url ?? '',
       r.notes ?? '',
       r.collection ?? '',
+      nutritionVal,
       now,
       id,
     ],
